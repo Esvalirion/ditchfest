@@ -1,118 +1,138 @@
-# Ditchfest Signs — фронтенд
+# Ditchfest Signs
 
-Статический сайт на GitHub Pages: https://ditchfest.su (репозиторий theonrd/Ditchfest-Signs).
-Галерея «знаков», голосование за карты Trackmania, топы мапперов/игроков, достижения,
-онбординг новичков.
+Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
+Прод: https://df.esvalirion.tech (позже — зеркало на `ditchfest.su`, см.
+плановый перенос в конце файла). Один Docker-образ отдаёт и API, и клиент —
+`server/` в проде раздаёт собранный `client/dist` как статику.
 
-## Стек и хостинг
-- Чистый HTML/CSS/JS, без сборщика и без фреймворка. Не предлагать Webpack/Vite/React —
-  если понадобится сборка, это отдельное решение, обсуждается явно.
-- Хостинг: GitHub Pages, ветка `main`, root `/`. Пуш в `main` = деплой.
-- Кастомный домен `ditchfest.su` — файл `CNAME` в корне обязателен, не удалять.
-- Бэкенд — ОТДЕЛЬНЫЙ репозиторий/проект на Cloudflare Workers (`tm-votes`).
-  Этот проект НИКОГДА не должен создавать серверный код — только вызывает Worker API.
+Бэкенд — не оригинальный: он **переписан с нуля на Express/Postgres**, сверен
+построчно с реальным `tm-votes` (закрытый Cloudflare Worker + D1, лежит вне
+этого репозитория) так, чтобы API-контракт и бизнес-правила совпадали.
+Расхождения с оригиналом ниже помечены явно — это не баги, а осознанные
+решения при переносе.
 
-## Как устроена страница
+## Стек
 
-Каждая HTML-страница — это скелет из ~25 строк: `<div id="site-header">`, свой
-корневой `<div id="…-root">` и `<footer id="site-footer">`. Шапку (навигация,
-кнопка логина, логотип) и футер рисует `js/layout.js`, содержимое — скрипт
-страницы. Порядок подключения фиксированный:
+| Слой | Технологии |
+|---|---|
+| `client/` | Vue 3 + Pinia + vue-router + Vite, ESM, SFC |
+| `server/` | Node, Express 5, `pg`, CommonJS (`require`) |
+| БД | PostgreSQL — своя `ditchfest_db`, может жить в общем Postgres-контейнере с другими проектами |
+| Деплой | Docker multi-stage → GHCR → VPS, GitHub Actions |
 
-```html
-<script src="./js/core.js"></script>    <!-- window.tm: сессия, api, el -->
-<script src="./js/layout.js"></script>  <!-- шапка и футер -->
-<script src="./js/background.js"></script>
-<script src="./js/achievements.js"></script>  <!-- если нужны бейджи -->
-<script src="./js/<страница>.js"></script>
-```
+## Как устроена страница/запрос
 
-`core.js` обязан идти первым: он забирает JWT из URL-фрагмента сразу при
-загрузке, ещё до `DOMContentLoaded`, поэтому все остальные скрипты видят уже
-готовую сессию. `layout.js` подключается до скрипта страницы, чтобы его
-`DOMContentLoaded`-обработчик отработал раньше.
+Один SPA вместо кучи HTML-файлов: `client/src/router/index.js` — маршруты,
+`App.vue` — шапка/футер/оверлеи + `<RouterView/>`. `main.js` создаёт Pinia и
+**обязательно** вызывает `useSessionStore().consumeRedirect()` до `app.mount()`
+— так весь остальной код видит уже готовую сессию (JWT из `#tm_token=` в URL).
 
-## Структура репозитория
+В dev клиент и сервер — два процесса: `vite dev` (:5173) проксирует `/api` и
+`/auth` на Express (:3000), см. `client/vite.config.js`. В проде один процесс:
+`server/app.js` отдаёт API и `express.static(server/public)` с fallback на
+`index.html` для клиентских маршрутов.
 
-Общее:
-- `js/core.js` — `window.tm`: `WORKER_URL`, `api()`, сессия (`getUser`, `login`,
-  `logout`, `sessionExpired`), DOM-хелперы (`el`, `escapeHtml`, `param`,
-  `message`). Единственное место, где лежит адрес Worker'а и ключ `tm_token`.
-- `js/layout.js` — навигация (список `NAV`), виджет логина, логотип, футер.
-  Пункт меню подсвечивается по имени файла; `BELONGS_TO` привязывает подстраницы
-  (`mapper.html` → Mappers). Менять меню/футер — только здесь.
-- `js/achievements.js` — рендер бейджей (`window.tmAchievements.grid/card`).
-  Тексты, иконки и флаг `earned` приходят из Worker, фронт ничего не решает.
-- `js/background.js` — параллакс фона, на всех страницах.
-- `css/style.css` — все стили, секциями с комментариями `/* --- … --- */`.
+## Карта модулей (`server/`)
 
-Страницы:
-- `index.html` + `js/script.js` — галерея знаков с фильтрами (единственная
-  страница со статическим контентом в HTML).
-- `voting.html` + `js/voting.js` — все выпуски аккордеоном, голосование «+».
-- `onboarding.html` + `js/onboarding.js` — пошаговое голосование для новичков:
-  один выпуск на экране, прогресс на сервере, в конце ачивка. Ссылка на него
-  есть только на своей странице аккаунта, в навигации её нет.
-- `mapper.html` + `js/mapper.js` — публичная страница аккаунта
-  (`?id=<accountId>`): ник, место в топе, достижения, карты. Она же личный
-  кабинет (отдельной `profile.html` нет): на своей странице появляются logout и
-  вход в админку для админов.
-- `top-mappers.html` + `js/mappers.js` — топ мапперов, строки ведут на
-  `mapper.html`.
-- `top-players.html` — заглушка.
-- `admin.html` + `js/admin.js` — управление админами, вход только со своей
-  страницы.
+| Файл | Зона ответственности |
+|---|---|
+| `routes/auth.js` | OAuth-флоу с api.trackmania.com (`/auth/login`, `/auth/callback`) |
+| `routes/editions.js`, `votes.js` | каталог, голосование, кто проголосовал |
+| `routes/mapper.js` | публичная страница аккаунта (`/api/mapper`), `/api/me` |
+| `routes/mappers.js` | топ мапперов |
+| `routes/onboarding.js` | пошаговое голосование новичка |
+| `routes/admins.js`, `links.js` | список админов, объединение аккаунтов |
+| `routes/sync.js` | ручной триггер синка каталога |
+| `middleware/auth.js` | Bearer JWT → `req.accountId`, `isAdmin()`, `first_login`-грант на каждый валидный токен |
+| `services/jwt.js` | подпись/проверка сессионного токена (HS256) |
+| `services/links.js` | объединение аккаунтов: `canon()` — SQL-фрагмент identity-резолва, `groupMembers`/`groupAlts` |
+| `services/achievements.js` | каталог ачивок + `earnedFromStats()` |
+| `services/grants.js` | выдача статистических ачивок (`refreshAccount`, `refreshEveryone`) |
+| `services/sync.js`, `tmio.js`, `catalog.js` | синк каталога с trackmania.io каждые 30 мин |
+| `services/names.js` | accountId → ник через TM OAuth (client credentials) |
+| `db.js` | `pg.Pool`, `DATABASE_URL` |
 
-Ассеты:
-- `res/` — изображения (могут быть тяжёлыми — не просить Claude их
-  «просматривать» целиком).
-- `Signs/` — исходники/шаблоны генерируемых «знаков».
+Правило: роут парсит запрос и формирует ответ, домен-специфичные SQL-запросы —
+в соответствующем `services/*.js`, доменные решения (что считается
+достижением) — в `achievements.js`. Новый роут = новый файл в `routes/` +
+строка в `routes/index.js`.
 
-## Работа с Worker API
-- Все вызовы — через `tm.api(path, opts)`: сам подставит `Authorization: Bearer`,
-  сериализует `opts.body` (наличие body = POST) и распарсит JSON. На не-2xx
-  бросает `Error` с `.status` и `.data`, поэтому в странице пишем:
-  ```js
-  try { const data = await tm.api('/api/onboarding'); }
-  catch (e) { if (e.status === 401) tm.sessionExpired(); else /* общее сообщение */ }
-  ```
-  Голых `fetch()` в страничных скриптах быть не должно.
-- Токен — JWT в `localStorage` под ключом `tm_token`. Фронтенд НЕ проверяет
-  подпись, только читает payload для отображения; Worker проверяет на каждом
-  запросе.
-- **Важно:** `FRONTEND_URL` в Worker должен совпадать с реальным origin сайта.
-  Если меняется домен — правится в ДРУГОМ проекте (Worker), не здесь.
+## Ключевые переменные (`server/.env`, см. `.env.example`)
 
-## Типовые задачи
-- **Новый пункт меню** — одна строка в `NAV` в `js/layout.js`.
-- **Новая страница** — скопировать скелет любой существующей страницы, поменять
-  `id` корневого div, заголовок и подключаемый скрипт.
-- **Новое достижение** — целиком на стороне Worker (каталог + правило), фронт
-  менять не нужно.
-- **Смена адреса Worker** — `WORKER_URL` в `js/core.js`.
+- `TM_CLIENT_ID`/`TM_CLIENT_SECRET` — TM OAuth-приложение (api.trackmania.com).
+  **Сейчас переиспользуется приложение проекта COTD** (`42cf3d7ca92aadc403df`)
+  — не своё; у оригинального `tm-votes` было отдельное. Redirect URI
+  регистрируется в кабинете api.trackmania.com отдельной строкой на каждый
+  домен, где крутится сайт.
+- `TM_FRONTEND_URL` — куда редиректить после логина (не путать с redirect_uri
+  самого OAuth — тот собирается динамически из запроса в `routes/auth.js`,
+  чтобы работать на нескольких доменах без правки конфига).
+- `JWT_SECRET` — свой, не переиспользовать секрет другого проекта.
+- `ROOT_ADMIN_ID` — один accountId, всегда админ, не хранится в таблице
+  `admins` и не может быть удалён через `/api/admins/remove`.
+- `TM_CLUB_ID=52818`, `TM_FOLDER_ID=829200` — клуб/папка Ditchfest на
+  trackmania.io, реальные значения из оригинального `tm-votes`.
+- `SYNC_SECRET` — заголовок `X-Sync-Secret` для ручного `POST /api/sync`.
 
-## Известные грабли (не наступать повторно)
-- GitHub Pages при заданном `CNAME` жёстко редиректит `*.github.io` → кастомный
-  домен. Это нормально, не «чинить».
-- CORS-ошибки почти всегда из-за рассинхрона `FRONTEND_URL` (Worker) и реального
-  origin сайта — сначала проверять протокол (http vs https) и домен, потом код.
-- Не хардкодить абсолютные URL (`https://ditchfest.su/...`) в ссылках/JS —
-  только относительные пути, чтобы сайт работал и на `github.io`, и на домене.
-- Шапка и футер существуют в единственном экземпляре в `layout.js`. Если
-  копируешь их обратно в HTML — они разъедутся, это уже было (кредиты в футере
-  разошлись между страницами).
-- Страницы полностью зависят от JS: без него видна только галерея на главной.
-  Это осознанный размен на отсутствие сборки и дублирования.
+## Объединение аккаунтов (`services/links.js`)
+
+Несколько Ubisoft-аккаунтов — один человек. Ничего не мержится в хранилище:
+голос остаётся на аккаунте, которым он отдан, карта — на реальном авторе.
+Все агрегаты (счётчик голосов, топ мапперов, ачивки) резолвят аккаунт в
+идентичность **на чтении** через SQL-фрагмент `canon(col)` — не забывать
+оборачивать `account_id`/`author_account_id` в `canon()` в новых запросах,
+иначе привязанные аккаунты будут считаться отдельно.
+
+## Достижения
+
+Каталог — в коде (`services/achievements.js`), в БД только `code`.
+**Код ачивки, который уже отгружен, нельзя переименовывать** — на него
+ссылаются реальные строки в таблице `achievements`. Два вида:
+- событийные — `grantAchievement()` в месте, где происходят (`first_login` —
+  `middleware/auth.js`, `onboarding_complete` — `routes/onboarding.js`);
+- статистические — правило в `earnedFromStats()`, выдаёт `grants.js`:
+  `refreshAccount()` при заходе на страницу аккаунта/после голоса,
+  `refreshEveryone()` — из каждого прогона синка каталога (ловит «был в
+  топ-10» и для тех, чью страницу никто не открывает).
+
+## Синк каталога (`services/sync.js`)
+
+`editions`/`maps` не вводятся руками — cron (`node-cron`, `7,37 * * * *` в
+`server.js`, та же частота, что была в оригинальном Worker-триггере) тянет
+клубную папку Ditchfest с trackmania.io и складывает в Postgres.
+`POST /api/sync` с `X-Sync-Secret` — ручной прогон для теста/бэкфилла.
+
+**Грабли: у trackmania.io мягкий рейт-лимит (~2 req/s).** Ручные повторные
+прогоны подряд (чаще раз в минуту) словят `sync_failed` — это не баг кода,
+подождать хотя бы 60 секунд между ручными прогонами.
+
+## Известные грабли
+
+- **`app.set('trust proxy', 1)` в `app.js` обязателен.** Без него
+  `req.protocol` всегда `'http'` за nginx, и `redirectUri()` в
+  `routes/auth.js` соберёт `http://` вместо `https://` — TM OAuth отклонит
+  как redirect_uri mismatch.
+- **Cloudflare в режиме Flexible** (проверено на проде): коннект
+  Cloudflare→origin идёт по HTTP, значит nginx-`$scheme` для этого
+  соединения — всегда `http`, даже если реальный посетитель зашёл по
+  `https`. `proxy_set_header X-Forwarded-Proto` должен быть захардкожен в
+  `https`, а не `$scheme` — иначе та же ошибка redirect_uri, что и выше.
+- **Не форсить редирект HTTP→HTTPS в nginx** (`certbot --redirect` это
+  делает по умолчанию) при Cloudflare Flexible — получится редирект-луп
+  через Cloudflare. Один server-блок на оба порта, без forced redirect —
+  см. рабочий конфиг у COTD на том же VPS.
+- Нет таблицы `accounts` — намеренно, как в оригинале. Имена резолвятся
+  живьём через `services/names.js` (тот же TM OAuth client credentials, что
+  и логин) и денормализуются на `maps.author_name`/`admins.display_name`.
+- Ачивки/линковка написаны под Postgres, но структурно 1:1 с D1-оригиналом
+  — если когда-нибудь появится доступ к реальным данным `tm-votes`, миграция
+  голосов возможна через публичное API (`/api/editions` +
+  `/api/map-voters?mapUid=`), не обязательно через экспорт D1.
 
 ## Как проверять изменения
-- Локально: `python -m http.server 8080` в корне репо. Для работы с локальным
-  Worker'ом временно поменять `WORKER_URL` в `js/core.js` и `FRONTEND_URL`
-  в Worker (иначе CORS) — обязательно вернуть перед коммитом.
-- Быстрый прогон всех страниц без браузера: jsdom-скрипт, который инлайнит
-  локальные `<script src>`, подменяет `fetch` фикстурами и проверяет, что шапка,
-  футер и контент отрисовались (см. историю — `/tmp/dfcheck/check.mjs`). Ловит
-  опечатки в общих модулях на всех страницах разом.
 
-## Где найти проект Worker
-- `C:\Users\DSSL\Desktop\TM\worker\tm-votes`, там свой `CLAUDE.md` — читать его
-  перед правками бэкенда, логику Worker здесь не дублировать.
+- `cd server && npm run dev` (:3000) + `cd client && npm run dev` (:5173).
+- `server/db/seed.js` — фикстуры для локального теста без реального
+  trackmania.io/Postgres прод-данных.
+- Перед пушем: `node --check` на изменённые файлы сервера (нет TS/линтера),
+  `npm run build` в `client/` должен проходить чисто.
