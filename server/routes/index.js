@@ -10,5 +10,6 @@ router.use('/api', require('./mappers'));
 router.use('/api', require('./onboarding'));
 router.use('/api', require('./admins'));
 router.use('/api', require('./links'));
+router.use('/api', require('./sync'));
 
 module.exports = router;
