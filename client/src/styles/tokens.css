@@ -1,0 +1,56 @@
+/* Design tokens extracted from the original css/style.css palette.
+   Component <style scoped> blocks should reference these instead of
+   hardcoding colours/spacing again — see REWRITE_PLAN.md "Как делить CSS". */
+:root {
+  /* Backgrounds */
+  --color-bg: #1a1a1a;
+  --color-bg-elevated: #111;
+  --color-overlay-1: rgba(255, 255, 255, 0.02);
+  --color-overlay-2: rgba(255, 255, 255, 0.025);
+  --color-overlay-3: rgba(255, 255, 255, 0.04);
+  --color-overlay-4: rgba(255, 255, 255, 0.05);
+  --color-overlay-5: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --color-text: #e0e0e0;
+  --color-text-bright: #fff;
+  --color-text-muted: #aaaaaa;
+  --color-text-dim: #888;
+  --color-text-dimmer: #777;
+  --color-text-faint: #666;
+  --color-text-faintest: #555;
+
+  /* Borders */
+  --color-border: #444;
+  --color-border-soft: #333;
+  --color-border-subtle: #2a2a2a;
+  --color-border-hairline: #242424;
+  --color-border-dashed: #3a3a3a;
+
+  /* Accent (success / voted / earned) */
+  --color-accent: #2e7d32;
+  --color-accent-hover: #388e3c;
+  --color-accent-text: #81c784;
+
+  /* Status */
+  --color-danger: #e57373;
+  --color-notification: #4caf50;
+
+  /* Roadmap badges */
+  --color-badge-short: #2e7d32;
+  --color-badge-mid: #1565c0;
+  --color-badge-long: #6a1b9a;
+  --color-badge-plan: #5d4037;
+
+  /* Shadows */
+  --shadow-card: 0 4px 15px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 8px 30px rgba(0, 0, 0, 0.7);
+
+  /* Radii */
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Typography */
+  --font-family-base: Arial, sans-serif;
+}

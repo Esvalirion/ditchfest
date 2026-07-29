@@ -1,0 +1,18 @@
+services:
+  ditchfest:
+    image: ${GHCR_IMAGE:-ditchfest-signs}
+    container_name: ditchfest-site
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Nginx fronts this (see COTD_MIGRATION_PLAN.md Фаза 7a/7b) — bound to
+      # localhost only, not exposed directly. 3004, not 3001: cotd-site
+      # already has 127.0.0.1:3001 on this VPS. The container itself always
+      # listens on :3000.
+      - "127.0.0.1:3004:3000"
+    networks:
+      - tm-network
+
+networks:
+  tm-network:
+    external: true
