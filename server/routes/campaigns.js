@@ -43,35 +43,35 @@ router.get('/campaigns', requireAdmin, async (_req, res) => {
       displayName: e.display_name,
       theme: e.theme,
       hidden: e.hidden,
+      sortOrder: e.sort_order,
       isVirtual: e.campaign_id < 0,
       maps: e.maps,
     })),
   });
 });
 
-// POST /api/campaigns/reorder { order: [campaignId, ...] } — admin-only.
-// Persists the whole board's left-to-right order in one go (0-based
-// sort_order per id given). Editions left out keep whatever sort_order they
-// already had — the client always sends the full current list, so in
-// practice nothing is left out.
-router.post('/campaigns/reorder', requireAdmin, async (req, res) => {
-  const order = req.body?.order;
-  if (!Array.isArray(order) || order.length === 0) {
-    return res.status(400).json({ error: 'missing_order' });
-  }
-  const ids = order.map(Number);
-  if (ids.some((id) => !Number.isFinite(id))) {
-    return res.status(400).json({ error: 'invalid_order' });
+// POST /api/campaigns/position { campaignId, position } — admin-only. Sets
+// one campaign's sort_order directly, z-index style: any finite number is
+// valid (not clamped to the current campaign count) and only this one row is
+// touched, so it doesn't disturb anyone else's manually-set value. The
+// client either sends a number the admin typed directly, or — when dragging
+// a column between two others — the midpoint of those neighbors' sort_order
+// (which is why sort_order is a float: there's always room to bisect without
+// ever needing to renumber the rest of the board).
+router.post('/campaigns/position', requireAdmin, async (req, res) => {
+  const campaignId = Number(req.body?.campaignId);
+  const position = Number(req.body?.position);
+  if (!Number.isFinite(campaignId) || !Number.isFinite(position)) {
+    return res.status(400).json({ error: 'invalid_position' });
   }
 
-  await pool.query(
-    `UPDATE editions SET sort_order = data.idx
-     FROM (SELECT unnest($1::int[]) AS campaign_id, unnest($2::int[]) AS idx) AS data
-     WHERE editions.campaign_id = data.campaign_id`,
-    [ids, ids.map((_, i) => i)]
-  );
+  const { rowCount } = await pool.query('UPDATE editions SET sort_order = $1 WHERE campaign_id = $2', [
+    position,
+    campaignId,
+  ]);
+  if (rowCount === 0) return res.status(404).json({ error: 'unknown_campaign' });
 
-  res.json({ ok: true });
+  res.json({ ok: true, campaignId, sortOrder: position });
 });
 
 // POST /api/campaigns { name } — admin-only. Creates a folder with no real

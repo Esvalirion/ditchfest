@@ -146,6 +146,7 @@ async function createFolder() {
       displayName: null,
       theme: null,
       hidden: false,
+      sortOrder: null,
       isVirtual: true,
       maps: [],
     });
@@ -177,46 +178,74 @@ function onColumnDragEnd() {
   dragOverCampaignId.value = null;
 }
 
-async function persistOrder(newIds) {
+// sort_order works like z-index: any number is a valid position, and moving
+// one column only ever writes that column's own value — no renumbering the
+// rest of the board (which is what made the old /campaigns/reorder tie the
+// position field's range to the current campaign count). ORDER_GAP is just
+// the spacing used when *inventing* a number (for a column that has no
+// sort_order yet, or when dragging leaves no room between two neighbors);
+// it has no meaning once a value is persisted.
+const ORDER_GAP = 1000;
+
+// Mirrors the API's ORDER BY (sort_order IS NULL), sort_order ASC,
+// campaign_id DESC exactly, so a locally-resorted list matches what a fresh
+// load() would return.
+function bySortOrder(a, b) {
+  const aNull = a.sortOrder == null;
+  const bNull = b.sortOrder == null;
+  if (aNull !== bNull) return aNull ? 1 : -1;
+  if (!aNull && a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  return b.campaignId - a.campaignId;
+}
+
+// editions.value is always already in correct visual order (server-sorted),
+// so a null sort_order can be stood in for by its slot in that order — safe
+// for neighbor math even before every column has an explicit value.
+function effectiveOrder(index) {
+  const e = editions.value[index];
+  if (!e) return null;
+  return e.sortOrder ?? index * ORDER_GAP;
+}
+
+async function persistPosition(edition, position) {
   const prevEditions = editions.value;
-  editions.value = newIds.map((id) => prevEditions.find((e) => e.campaignId === id));
+  const updated = prevEditions.map((e) =>
+    e.campaignId === edition.campaignId ? { ...e, sortOrder: position } : e
+  );
+  editions.value = updated.sort(bySortOrder);
 
   try {
-    await api('/api/campaigns/reorder', { body: { order: newIds } });
+    await api('/api/campaigns/position', { body: { campaignId: edition.campaignId, position } });
   } catch (e) {
     editions.value = prevEditions; // roll back
   }
 }
 
+// Dropping onto a column inserts the dragged one immediately before it, by
+// bisecting the target's sort_order and its own predecessor's — a float
+// midpoint always exists, so this never needs to touch any other column.
 async function reorderColumns(draggedId, targetId) {
   if (draggedId === targetId) return;
   const ids = editions.value.map((e) => e.campaignId);
-  const fromIdx = ids.indexOf(draggedId);
-  const toIdx = ids.indexOf(targetId);
-  if (fromIdx === -1 || toIdx === -1) return;
+  const targetIdx = ids.indexOf(targetId);
+  const draggedIdx = ids.indexOf(draggedId);
+  if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx - 1) return;
 
-  const newIds = [...ids];
-  newIds.splice(fromIdx, 1);
-  newIds.splice(toIdx, 0, draggedId);
-  await persistOrder(newIds);
+  const before = targetIdx > 0 ? effectiveOrder(targetIdx - 1) : null;
+  const after = effectiveOrder(targetIdx);
+  const newValue = before === null ? after - ORDER_GAP : (before + after) / 2;
+
+  const edition = editions.value.find((e) => e.campaignId === draggedId);
+  await persistPosition(edition, newValue);
 }
 
 // Typing a position directly beats dragging a column across a hundred-plus
-// others to reach the far end of the board.
+// others to reach the far end of the board — type any number, like a
+// z-index, and that's exactly where it sorts.
 function movePosition(edition, rawPosition) {
-  const ids = editions.value.map((e) => e.campaignId);
-  const fromIdx = ids.indexOf(edition.campaignId);
-  if (fromIdx === -1) return;
-
   const parsed = Number(rawPosition);
-  if (!Number.isFinite(parsed)) return;
-  const toIdx = Math.max(0, Math.min(ids.length - 1, Math.round(parsed) - 1));
-  if (toIdx === fromIdx) return;
-
-  const newIds = [...ids];
-  newIds.splice(fromIdx, 1);
-  newIds.splice(toIdx, 0, edition.campaignId);
-  persistOrder(newIds);
+  if (!Number.isFinite(parsed) || parsed === edition.sortOrder) return;
+  persistPosition(edition, parsed);
 }
 
 // Shared by drag-drop and the "Return" button: moves a map to targetCampaignId
@@ -301,10 +330,9 @@ load();
         <div class="campaign-col-header">
           <input
             type="number"
-            min="1"
-            :max="editions.length"
+            step="any"
             class="campaign-position"
-            :value="index + 1"
+            :value="Math.round(effectiveOrder(index))"
             @keydown.enter="movePosition(edition, $event.target.value); $event.target.blur()"
             @change="movePosition(edition, $event.target.value)"
           />
@@ -440,7 +468,7 @@ load();
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 32px;
+  width: 44px;
   padding: 2px 4px;
   background: var(--color-overlay-4);
   border: 1px solid var(--color-border-subtle);

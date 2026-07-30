@@ -17,7 +17,7 @@ const { canon } = require('./links');
  *  maps this way (or not yet synced), are dropped: neither is useful to
  *  show or to walk through in onboarding.
  *
- *  Order is sort_order (set by /api/campaigns/reorder) when an admin has
+ *  Order is sort_order (set by /api/campaigns/position) when an admin has
  *  arranged the board, then the chronological rule below for everything
  *  else — so newly-synced editions the admin hasn't touched yet still slot
  *  in after the manually-arranged ones instead of vanishing to wherever
