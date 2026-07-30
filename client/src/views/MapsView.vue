@@ -43,7 +43,7 @@ load();
 </script>
 
 <template>
-  <div id="voting-root">
+  <div id="maps-root">
     <p v-if="state === 'loading'" class="subtitle">Loading…</p>
     <p v-else-if="state === 'error'" class="subtitle">Failed to load maps. Try again later.</p>
     <p v-else-if="state === 'empty'" class="subtitle">The map catalog is syncing. Please check back soon.</p>
@@ -80,7 +80,7 @@ load();
 </template>
 
 <style scoped>
-#voting-root {
+#maps-root {
   max-width: 820px;
   margin: 0 auto;
 }
