@@ -2,12 +2,19 @@
 
 Сайт сообщества **Ditchfest** — Trackmania-ивента, где мапперы делают карты на
 общую тему, а сообщество голосует за них и следит за топами. Живой прод:
-**https://df.esvalirion.tech**.
+**https://df.esvalirion.tech** (зеркало — **https://ditchfest.su**, тот же
+сервер и та же БД, оба домена смотрят в один Docker-контейнер).
 
 Галерея «знаков» (шаблонов для соцсетей), голосование за карты, страница
 каждой карты со ссылками на trackmania.io/Trackmania Exchange и топ-5 таймов,
 топ мапперов, достижения, онбординг новичков, каталог карт синкается напрямую
-с [trackmania.io](https://trackmania.io).
+с [trackmania.io](https://trackmania.io). Админка (`/admin`) — управление
+списком админов и объединением аккаунтов, плюс `/admin/campaigns`: доска
+кампаний-«папок» с drag-n-drop (тема, переименование, скрытие, кастомные
+папки без реальной Nadeo-кампании, перенос карт между кампаниями, ручная
+сортировка) — нужна, когда на один Ditchfest-эдишен приходится больше 25 карт
+(лимит Nadeo на кампанию) и его приходится дробить на несколько реальных
+кампаний на trackmania.io.
 
 ## Стек
 
@@ -26,21 +33,27 @@
 ## Локальный запуск
 
 ```bash
-# Postgres — своя база, схема:
+# Postgres — своя база, схема (по порядку, все идемпотентны):
 psql -d postgres -f server/db/001_create_databases.sql
 psql -d postgres -f server/db/002_schema.sql
+psql -d postgres -f server/db/003_campaign_overrides.sql
+psql -d postgres -f server/db/004_campaign_folders.sql
+psql -d postgres -f server/db/005_campaign_sort_order.sql
 
 # Бэкенд
 cd server
 cp .env.example .env   # заполнить TM_CLIENT_ID/SECRET, DATABASE_URL и т.д.
 npm install
-npm run dev             # :3000
 
-# Фронтенд (в другом терминале)
-cd client
+# Фронтенд
+cd ../client
 npm install
-npm run dev             # :5173, проксирует /api и /auth на :3000
 ```
+
+Дальше — либо руками в двух терминалах (`cd server && npm run dev` — :3000,
+`cd client && npm run dev` — :5173, проксирует `/api` и `/auth` на :3000),
+либо одной командой из корня репозитория: `./scripts/dev.sh` (поднимает оба,
+`Ctrl+C` гасит оба).
 
 Открыть `http://localhost:5173`.
 

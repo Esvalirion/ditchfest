@@ -23,6 +23,12 @@ const routes = [
   },
   { path: '/onboarding', name: 'onboarding', component: () => import('../views/OnboardingView.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue') },
+  {
+    path: '/admin/campaigns',
+    name: 'admin-campaigns',
+    component: () => import('../views/AdminCampaignsView.vue'),
+    meta: { navGroup: 'admin' },
+  },
 ];
 
 export default createRouter({

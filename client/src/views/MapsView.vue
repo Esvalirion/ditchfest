@@ -60,7 +60,10 @@ load();
         :class="{ open: edition._open }"
       >
         <button class="vote-group-header" @click="edition._open = !edition._open">
-          <span class="vg-title">{{ edition.name }}</span>
+          <span class="vg-title">
+            {{ edition.name }}
+            <span v-if="edition.theme" class="vg-theme">— {{ edition.theme }}</span>
+          </span>
           <span class="vg-count">{{ edition.maps.length }} maps</span>
         </button>
 
@@ -126,6 +129,12 @@ load();
 
 .vg-title {
   flex: 1;
+}
+
+.vg-theme {
+  color: var(--color-text-dim);
+  font-weight: normal;
+  font-size: 0.9rem;
 }
 
 .vg-count {

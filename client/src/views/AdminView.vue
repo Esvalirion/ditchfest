@@ -5,6 +5,7 @@
      list. -->
 <script setup>
 import { ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
 
@@ -92,6 +93,10 @@ load();
     <p v-else-if="state === 'error'" class="subtitle">Failed to load. Try again later.</p>
 
     <template v-else-if="state === 'ready'">
+      <p class="admin-nav-link">
+        <RouterLink :to="{ name: 'admin-campaigns' }">Manage campaigns →</RouterLink>
+      </p>
+
       <div class="admin-card">
         <label class="admin-label">Add admin by Ubisoft account ID</label>
         <div class="admin-add">
@@ -127,6 +132,17 @@ load();
 </template>
 
 <style scoped>
+.admin-nav-link {
+  max-width: 560px;
+  margin: 0 auto 16px auto;
+  text-align: right;
+}
+
+.admin-nav-link a {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
 .admin-card {
   max-width: 560px;
   margin: 0 auto 24px auto;

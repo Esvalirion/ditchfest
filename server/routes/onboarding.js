@@ -20,10 +20,9 @@ async function getOnboardingDone(members) {
 router.get('/onboarding', requireAuth, async (req, res) => {
   const members = await groupMembers(req.accountId);
 
-  // getEditions() is newest-first; onboarding walks history forward instead.
-  // Editions whose maps haven't synced/been entered yet are skipped — an
-  // empty screen the player can't act on would just be a dead step.
-  const editions = (await getEditions()).filter((e) => e.maps.length > 0).reverse();
+  // getEditions() is newest-first (and already drops empty editions);
+  // onboarding walks history forward instead.
+  const editions = (await getEditions()).reverse();
 
   const done = await getOnboardingDone(members);
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
@@ -47,8 +46,11 @@ router.post('/onboarding/step', requireAuth, async (req, res) => {
   }
 
   // Same set the GET above serves, so "finished everything" means the same
-  // thing on both sides.
-  const eligible = await pool.query('SELECT DISTINCT campaign_id FROM maps');
+  // thing on both sides — keyed by effective (display-overridden) campaign,
+  // same as getEditions().
+  const eligible = await pool.query(
+    'SELECT DISTINCT COALESCE(display_campaign_id, campaign_id) AS campaign_id FROM maps'
+  );
   const eligibleIds = new Set(eligible.rows.map((r) => Number(r.campaign_id)));
   if (!eligibleIds.has(campaignId)) {
     return res.status(404).json({ error: 'unknown_campaign' });

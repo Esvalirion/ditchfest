@@ -12,5 +12,6 @@ router.use('/api', require('./onboarding'));
 router.use('/api', require('./admins'));
 router.use('/api', require('./links'));
 router.use('/api', require('./sync'));
+router.use('/api', require('./campaigns'));
 
 module.exports = router;

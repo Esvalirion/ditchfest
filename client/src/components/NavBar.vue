@@ -2,9 +2,11 @@
 // Nav entries + the "which subpage belongs to which nav item" mapping used
 // to live in js/layout.js as NAV / BELONGS_TO. Here it's route.meta.navGroup
 // set per-route in router/index.js instead of a filename lookup table.
+import { computed, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { useSessionStore } from '../stores/session';
 
-const NAV = [
+const BASE_NAV = [
   { name: 'signs', label: 'Signs' },
   { name: 'maps', label: 'Maps' },
   { name: 'top-players', label: 'Players' },
@@ -13,6 +15,15 @@ const NAV = [
 ];
 
 const route = useRoute();
+const session = useSessionStore();
+
+const NAV = computed(() =>
+  session.isAdmin ? [...BASE_NAV, { name: 'admin', label: 'Admin' }] : BASE_NAV
+);
+
+watch(() => session.isLoggedIn, (loggedIn) => (loggedIn ? session.checkAdmin() : (session.isAdmin = false)), {
+  immediate: true,
+});
 
 function isActive(navName) {
   return route.name === navName || route.meta.navGroup === navName;

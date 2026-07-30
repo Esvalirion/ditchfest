@@ -17,6 +17,10 @@ function decodePayload(token) {
 export const useSessionStore = defineStore('session', {
   state: () => ({
     token: localStorage.getItem(TOKEN_KEY),
+    // Cached admin flag for NavBar's "Admin" link — checkAdmin() sets it,
+    // logout() clears it. A plain fetch (not utils/api.js's api() helper) to
+    // avoid a circular import: api.js itself imports this store.
+    isAdmin: false,
   }),
 
   getters: {
@@ -47,7 +51,24 @@ export const useSessionStore = defineStore('session', {
 
     logout() {
       this.token = null;
+      this.isAdmin = false;
       localStorage.removeItem(TOKEN_KEY);
+    },
+
+    /** Populates isAdmin for NavBar's "Admin" link. Best-effort: any failure
+     *  just leaves the link hidden, same as a non-admin. */
+    async checkAdmin() {
+      if (!this.token) {
+        this.isAdmin = false;
+        return;
+      }
+      try {
+        const res = await fetch('/api/me', { headers: { Authorization: 'Bearer ' + this.token } });
+        const data = res.ok ? await res.json() : null;
+        this.isAdmin = !!(data && data.isAdmin);
+      } catch (e) {
+        this.isAdmin = false;
+      }
     },
 
     /** The backend rejected our token mid-session: drop it and start over. */

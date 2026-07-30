@@ -1,9 +1,12 @@
 # Ditchfest Signs
 
 Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
-Прод: https://df.esvalirion.tech (позже — зеркало на `ditchfest.su`, см.
-плановый перенос в конце файла). Один Docker-образ отдаёт и API, и клиент —
-`server/` в проде раздаёт собранный `client/dist` как статику.
+Прод: https://df.esvalirion.tech, зеркало — https://ditchfest.su (тот же
+VPS/контейнер/БД, второй домен просто добавлен в `server_name` того же
+nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`, они
+берут домен из запроса, а не из конфига, ровно чтобы работать на нескольких
+доменах сразу). Один Docker-образ отдаёт и API, и клиент — `server/` в проде
+раздаёт собранный `client/dist` как статику.
 
 Бэкенд — не оригинальный: он **переписан с нуля на Express/Postgres**, сверен
 построчно с реальным `tm-votes` (закрытый Cloudflare Worker + D1, лежит вне
@@ -38,6 +41,7 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
 |---|---|
 | `routes/auth.js` | OAuth-флоу с api.trackmania.com (`/auth/login`, `/auth/callback`) |
 | `routes/editions.js`, `votes.js` | каталог, голосование, кто проголосовал |
+| `routes/campaigns.js` | admin-only управление кампаниями-«папками» (`/admin/campaigns`): тема, переименование, скрытие, создание кастомных папок, перенос карт между кампаниями, ручная сортировка |
 | `routes/map.js` | страница одной карты (`/api/map/:uid`): ссылки на trackmania.io/TMX, топ-5 таймов, рейтинг |
 | `routes/mapper.js` | публичная страница аккаунта (`/api/mapper`), `/api/me` |
 | `routes/mappers.js` | топ мапперов |
@@ -108,6 +112,36 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
 прогоны подряд (чаще раз в минуту) словят `sync_failed` — это не баг кода,
 подождать хотя бы 60 секунд между ручными прогонами.
 
+## Кампании-«папки» и переопределения (`routes/campaigns.js`, `services/editions.js`)
+
+Nadeo ограничивает кампанию 25 картами; когда в эдишене карт больше, его
+приходится дробить на несколько реальных кампаний на trackmania.io — синк
+заводит их как отдельные, формально не связанные строки в `editions`.
+Чтобы админ мог показать это на сайте одним целым (и вообще управлять
+подписью/видимостью кампании), у `editions`/`maps` есть отдельный слой
+admin-редактируемых колонок, которые `services/sync.js`/`services/catalog.js`
+**никогда не пишут** — правило то же, что и у `admins`/`account_links`: синк
+не должен затирать ручные правки при следующем прогоне.
+
+- `editions.theme`, `editions.display_name`, `editions.hidden` —
+  публичная тема, переименование (не трогая синкнутое `name`), скрытие с
+  сайта независимо от того, есть ли карты.
+- `editions.sort_order` — ручной порядок колонок/эдишенов; `NULL` (по
+  умолчанию) — сортировка как раньше, по `campaign_id`/новизне карт внутри.
+- `maps.display_campaign_id` — карта показывается под другой кампанией, чем
+  её реальная синкнутая `campaign_id` (перенос между «папками» на
+  `/admin/campaigns`, drag-n-drop или кнопка «Return»).
+- Кастомная «папка» без реальной Nadeo-кампании — `editions` с отрицательным
+  `campaign_id` (`editions_virtual_id_seq`); реальные id у Nadeo всегда
+  положительные, коллизий не будет.
+
+`services/editions.js`'s `getEditions()` — единственное место, которое читает
+все эти колонки и решает, что реально показать (эффективная кампания карты =
+`COALESCE(display_campaign_id, campaign_id)`, эффективное имя = `COALESCE(
+display_name, name)`, пустые и `hidden` эдишены отбрасываются) — используется
+и `routes/editions.js`, и `routes/onboarding.js`, так что обе страницы всегда
+видят один и тот же каталог.
+
 ## Известные грабли
 
 - **`app.set('trust proxy', 1)` в `app.js` обязателен.** Без него
@@ -134,11 +168,26 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
   через `services/sync.js`), на каждый запрос страницы карты — оба вызова
   обёрнуты в `try/catch` и best-effort: сбой одного не валит страницу, просто
   `leaderboard: []` / `tmxUrl: null`.
+- **Пост-логин редирект в проде берётся из самого запроса, не из
+  `TM_FRONTEND_URL`.** `routes/auth.js`'s `frontendBase()` проверяет
+  `req.app.locals.servesClient` (true в проде, где `server/public` реально
+  раздаётся) — если true, редиректит на `req.protocol`/`req.get('host')`, а
+  не на статичный `TM_FRONTEND_URL`. Без этого залогинившийся с ditchfest.su
+  после OAuth улетал бы на df.esvalirion.tech (или наоборот, смотря что
+  прописано в `.env`) — так уже было один раз, когда мирроринг только
+  добавили. В dev (raw `TM_FRONTEND_URL=http://localhost:5173`,
+  `servesClient` = false) поведение не изменилось.
 
 ## Как проверять изменения
 
-- `cd server && npm run dev` (:3000) + `cd client && npm run dev` (:5173).
+- `cd server && npm run dev` (:3000) + `cd client && npm run dev` (:5173) —
+  или одной командой из корня: `./scripts/dev.sh` (поднимает оба, `Ctrl+C`
+  гасит оба).
 - `server/db/seed.js` — фикстуры для локального теста без реального
   trackmania.io/Postgres прод-данных.
 - Перед пушем: `node --check` на изменённые файлы сервера (нет TS/линтера),
   `npm run build` в `client/` должен проходить чисто.
+- Новые SQL-миграции — идемпотентные файлы `server/db/00N_*.sql` (как
+  `002_schema.sql`), применяются вручную через `psql` (нет раннера
+  миграций) — и локально, и на проде (`docker exec` в контейнер
+  `tm-postgres` на VPS).

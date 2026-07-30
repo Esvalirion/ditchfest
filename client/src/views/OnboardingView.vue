@@ -199,6 +199,7 @@ load();
       </div>
 
       <h1 class="ob-title">{{ currentEdition.name }}</h1>
+      <p v-if="currentEdition.theme" class="ob-theme">{{ currentEdition.theme }}</p>
       <p class="ob-lead">Click every map you like. Liking nothing here is a valid answer — just hit Next.</p>
 
       <div class="ob-grid">
@@ -289,6 +290,12 @@ load();
   color: var(--color-text-bright);
   font-size: 1.6rem;
   margin: 0 0 10px 0;
+}
+
+.ob-theme {
+  color: var(--color-text-dim);
+  font-size: 0.95rem;
+  margin: -6px 0 10px 0;
 }
 
 .ob-lead {
