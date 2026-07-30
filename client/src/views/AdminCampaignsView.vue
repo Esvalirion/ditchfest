@@ -334,6 +334,37 @@ load();
   padding-bottom: 12px;
 }
 
+/* Thin, dark-themed scrollbars for the horizontal board and each column's
+   vertical map list — the browser default is a jarring light-grey slab on
+   this otherwise all-dark page. */
+.campaign-board,
+.campaign-col-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.campaign-board::-webkit-scrollbar,
+.campaign-col-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.campaign-board::-webkit-scrollbar-track,
+.campaign-col-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.campaign-board::-webkit-scrollbar-thumb,
+.campaign-col-body::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.campaign-board::-webkit-scrollbar-thumb:hover,
+.campaign-col-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-dim);
+}
+
 .campaign-col {
   flex: 0 0 260px;
   background-color: var(--color-overlay-1);
