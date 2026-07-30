@@ -23,7 +23,7 @@ const DISCORDS = [
         <span>{{ d.label }}</span>
       </a>
     </div>
-    <p class="developer-info">Credits: onrd.., Soba, Rezzn, DamnedLight</p>
+    <p class="developer-info">Credits: onrd.., Soba, Rezzn, DamnedLight, esvalirion</p>
     <div class="copyright">Fuck you ditchfest mappers © 2025-2026</div>
   </footer>
 </template>
