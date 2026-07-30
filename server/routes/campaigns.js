@@ -78,19 +78,47 @@ router.post('/campaigns/reorder', requireAdmin, async (req, res) => {
 // Nadeo campaign behind it, for stashing maps that don't fit anywhere real
 // (see the negative-id sequence in 004_campaign_folders.sql). Starts empty
 // and hidden from the public site until maps actually land in it (getEditions
-// drops empty editions on its own).
+// drops empty editions on its own). sort_order is set below the current
+// minimum so it sorts first (leftmost) on the board — otherwise it'd fall
+// back to campaign_id DESC, and a virtual folder's negative id would sink
+// to the very end.
 router.post('/campaigns', requireAdmin, async (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'missing_name' });
 
   const { rows } = await pool.query(
-    `INSERT INTO editions (campaign_id, name)
-     VALUES (nextval('editions_virtual_id_seq'), $1)
+    `INSERT INTO editions (campaign_id, name, sort_order)
+     VALUES (
+       nextval('editions_virtual_id_seq'),
+       $1,
+       (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM editions)
+     )
      RETURNING campaign_id`,
     [name]
   );
 
   res.json({ ok: true, campaignId: rows[0].campaign_id, name });
+});
+
+// POST /api/campaigns/delete { campaignId } — admin-only. Only for
+// admin-created folders (negative campaign_id) — a real synced edition would
+// just come back on the next catalog sync, and maps.campaign_id's FK is
+// ON DELETE CASCADE for real editions, which would destroy actual map rows.
+// Maps display-overridden into the deleted folder fall back to their real
+// campaign automatically (maps.display_campaign_id's FK is ON DELETE SET NULL).
+router.post('/campaigns/delete', requireAdmin, async (req, res) => {
+  const campaignId = Number(req.body?.campaignId);
+  if (!Number.isFinite(campaignId)) {
+    return res.status(400).json({ error: 'missing_campaignId' });
+  }
+  if (campaignId >= 0) {
+    return res.status(400).json({ error: 'not_a_folder' });
+  }
+
+  const { rowCount } = await pool.query('DELETE FROM editions WHERE campaign_id = $1', [campaignId]);
+  if (rowCount === 0) return res.status(404).json({ error: 'unknown_campaign' });
+
+  res.json({ ok: true, campaignId });
 });
 
 // POST /api/campaigns/theme { campaignId, theme } — admin-only.

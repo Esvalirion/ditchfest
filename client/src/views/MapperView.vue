@@ -18,20 +18,17 @@ const session = useSessionStore();
 const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const mapper = ref(null);
 const myVotes = ref(new Set());
-// Verified server-side separately from isOwner() below — a dead session must
-// not keep showing owner controls, and the answer also says whether to
-// reveal the admin entry.
-const adminConfirmed = ref(false);
 
 function isOwner(accountId) {
   return session.isLoggedIn && session.user.accountId === accountId;
 }
 
+// Verified server-side separately from isOwner() above — a dead session
+// must not keep showing owner controls (logout button, onboarding link).
 async function confirmSession() {
   if (!session.token) return;
   try {
-    const me = await api('/api/me');
-    adminConfirmed.value = !!(me && me.isAdmin);
+    await api('/api/me');
   } catch (e) {
     if (e.status === 401) {
       session.logout();
@@ -44,7 +41,6 @@ async function confirmSession() {
 async function load(id) {
   state.value = 'loading';
   mapper.value = null;
-  adminConfirmed.value = false;
 
   if (!id) {
     state.value = 'error';
@@ -117,7 +113,6 @@ watch(() => route.params.id, load, { immediate: true });
             <!-- The only entry point to onboarding — deliberately not in the nav. -->
             <RouterLink class="auth-btn" :to="{ name: 'onboarding' }">Start here</RouterLink>
             <button class="auth-btn" @click="doLogout">Logout</button>
-            <RouterLink v-if="adminConfirmed" class="admin-badge" :to="{ name: 'admin' }">Admin</RouterLink>
           </div>
         </div>
       </div>
@@ -248,27 +243,5 @@ watch(() => route.params.id, load, { immediate: true });
   align-items: center;
   justify-content: center;
   gap: 10px;
-}
-
-/* Admin status badge — shown only to admins, only on their own page. */
-.admin-badge {
-  display: inline-block;
-  padding: 6px 16px;
-  background: var(--color-accent);
-  color: #fff;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: bold;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  text-decoration: none;
-}
-
-.admin-badge::before {
-  content: "★ ";
-}
-
-.admin-badge:hover {
-  background: var(--color-accent-hover);
 }
 </style>

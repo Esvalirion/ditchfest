@@ -21,6 +21,7 @@ const savingTheme = ref({}); // campaignId -> bool
 const nameDrafts = ref({}); // campaignId -> draft text while editing
 const savingName = ref({}); // campaignId -> bool
 const savingHidden = ref({}); // campaignId -> bool
+const deletingFolder = ref({}); // campaignId -> bool
 const newFolderName = ref('');
 const creatingFolder = ref(false);
 const draggingMapUid = ref(null);
@@ -110,6 +111,23 @@ async function toggleHidden(edition) {
   }
 }
 
+async function deleteFolder(edition) {
+  deletingFolder.value = { ...deletingFolder.value, [edition.campaignId]: true };
+  try {
+    await api('/api/campaigns/delete', { body: { campaignId: edition.campaignId } });
+    // Mirrors the FK's ON DELETE SET NULL: any map display-overridden into
+    // this folder falls back to its real campaign.
+    for (const e of editions.value) {
+      for (const m of e.maps) {
+        if (m.displayCampaignId === edition.campaignId) m.displayCampaignId = null;
+      }
+    }
+    editions.value = editions.value.filter((e) => e.campaignId !== edition.campaignId);
+  } catch (e) {
+    deletingFolder.value = { ...deletingFolder.value, [edition.campaignId]: false };
+  }
+}
+
 async function createFolder() {
   const name = newFolderName.value.trim();
   if (!name) return;
@@ -153,6 +171,17 @@ function onColumnDragEnd() {
   dragOverCampaignId.value = null;
 }
 
+async function persistOrder(newIds) {
+  const prevEditions = editions.value;
+  editions.value = newIds.map((id) => prevEditions.find((e) => e.campaignId === id));
+
+  try {
+    await api('/api/campaigns/reorder', { body: { order: newIds } });
+  } catch (e) {
+    editions.value = prevEditions; // roll back
+  }
+}
+
 async function reorderColumns(draggedId, targetId) {
   if (draggedId === targetId) return;
   const ids = editions.value.map((e) => e.campaignId);
@@ -163,15 +192,25 @@ async function reorderColumns(draggedId, targetId) {
   const newIds = [...ids];
   newIds.splice(fromIdx, 1);
   newIds.splice(toIdx, 0, draggedId);
+  await persistOrder(newIds);
+}
 
-  const prevEditions = editions.value;
-  editions.value = newIds.map((id) => prevEditions.find((e) => e.campaignId === id));
+// Typing a position directly beats dragging a column across a hundred-plus
+// others to reach the far end of the board.
+function movePosition(edition, rawPosition) {
+  const ids = editions.value.map((e) => e.campaignId);
+  const fromIdx = ids.indexOf(edition.campaignId);
+  if (fromIdx === -1) return;
 
-  try {
-    await api('/api/campaigns/reorder', { body: { order: newIds } });
-  } catch (e) {
-    editions.value = prevEditions; // roll back
-  }
+  const parsed = Number(rawPosition);
+  if (!Number.isFinite(parsed)) return;
+  const toIdx = Math.max(0, Math.min(ids.length - 1, Math.round(parsed) - 1));
+  if (toIdx === fromIdx) return;
+
+  const newIds = [...ids];
+  newIds.splice(fromIdx, 1);
+  newIds.splice(toIdx, 0, edition.campaignId);
+  persistOrder(newIds);
 }
 
 // Shared by drag-drop and the "Return" button: moves a map to targetCampaignId
@@ -245,7 +284,7 @@ load();
 
       <div class="campaign-board">
       <div
-        v-for="edition in editions"
+        v-for="(edition, index) in editions"
         :key="edition.campaignId"
         class="campaign-col"
         :class="{ 'drag-over': dragOverCampaignId === edition.campaignId, hidden: edition.hidden, dragging: draggingColumnId === edition.campaignId }"
@@ -254,6 +293,15 @@ load();
         @drop.prevent="onDrop(edition.campaignId)"
       >
         <div class="campaign-col-header">
+          <input
+            type="number"
+            min="1"
+            :max="editions.length"
+            class="campaign-position"
+            :value="index + 1"
+            @keydown.enter="movePosition(edition, $event.target.value); $event.target.blur()"
+            @change="movePosition(edition, $event.target.value)"
+          />
           <div
             class="campaign-drag-handle"
             draggable="true"
@@ -280,6 +328,12 @@ load();
             <button class="campaign-hide-btn" :disabled="savingHidden[edition.campaignId]" @click="toggleHidden(edition)">
               {{ edition.hidden ? 'Show' : 'Hide' }}
             </button>
+            <button
+              v-if="edition.isVirtual"
+              class="campaign-hide-btn campaign-delete-btn"
+              :disabled="deletingFolder[edition.campaignId]"
+              @click="deleteFolder(edition)"
+            >Delete</button>
           </div>
           <div class="campaign-theme-row">
             <input
@@ -366,6 +420,7 @@ load();
 }
 
 .campaign-col {
+  position: relative;
   flex: 0 0 260px;
   background-color: var(--color-overlay-1);
   border: 1px solid var(--color-border-soft);
@@ -373,6 +428,34 @@ load();
   display: flex;
   flex-direction: column;
   max-height: 80vh;
+}
+
+.campaign-position {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  padding: 2px 4px;
+  background: var(--color-overlay-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-dim);
+  font-size: 0.7rem;
+  font-family: monospace;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.campaign-position:focus {
+  outline: none;
+  border-color: var(--color-text-bright);
+  color: var(--color-text-bright);
+}
+
+.campaign-position::-webkit-outer-spin-button,
+.campaign-position::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .campaign-col.drag-over {
@@ -466,6 +549,11 @@ load();
 .campaign-hide-btn:hover {
   border-color: var(--color-text-bright);
   color: var(--color-text-bright);
+}
+
+.campaign-delete-btn:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .campaign-theme-row {
