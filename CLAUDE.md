@@ -38,6 +38,7 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
 |---|---|
 | `routes/auth.js` | OAuth-флоу с api.trackmania.com (`/auth/login`, `/auth/callback`) |
 | `routes/editions.js`, `votes.js` | каталог, голосование, кто проголосовал |
+| `routes/map.js` | страница одной карты (`/api/map/:uid`): ссылки на trackmania.io/TMX, топ-5 таймов, рейтинг |
 | `routes/mapper.js` | публичная страница аккаунта (`/api/mapper`), `/api/me` |
 | `routes/mappers.js` | топ мапперов |
 | `routes/onboarding.js` | пошаговое голосование новичка |
@@ -48,7 +49,8 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
 | `services/links.js` | объединение аккаунтов: `canon()` — SQL-фрагмент identity-резолва, `groupMembers`/`groupAlts` |
 | `services/achievements.js` | каталог ачивок + `earnedFromStats()` |
 | `services/grants.js` | выдача статистических ачивок (`refreshAccount`, `refreshEveryone`) |
-| `services/sync.js`, `tmio.js`, `catalog.js` | синк каталога с trackmania.io каждые 30 мин |
+| `services/sync.js`, `tmio.js`, `catalog.js` | синк каталога с trackmania.io каждые 30 мин; `tmio.js` также отдаёт топ-5 таймов карты для `routes/map.js` |
+| `services/tmx.js` | поиск карты на Trackmania Exchange по `map_uid` — best-effort, не все карты там есть |
 | `services/names.js` | accountId → ник через TM OAuth (client credentials) |
 | `db.js` | `pg.Pool`, `DATABASE_URL` |
 
@@ -128,6 +130,10 @@ Vue 3 + Express/Postgres site for Ditchfest, a Trackmania mapping event.
   — если когда-нибудь появится доступ к реальным данным `tm-votes`, миграция
   голосов возможна через публичное API (`/api/editions` +
   `/api/map-voters?mapUid=`), не обязательно через экспорт D1.
+- `routes/map.js` дёргает trackmania.io и trackmania.exchange напрямую (не
+  через `services/sync.js`), на каждый запрос страницы карты — оба вызова
+  обёрнуты в `try/catch` и best-effort: сбой одного не валит страницу, просто
+  `leaderboard: []` / `tmxUrl: null`.
 
 ## Как проверять изменения
 

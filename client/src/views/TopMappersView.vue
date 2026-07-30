@@ -35,7 +35,7 @@ onMounted(load);
   <div id="mappers-root">
     <p v-if="state === 'loading'" class="subtitle">Loading…</p>
     <p v-else-if="state === 'error'" class="subtitle">Failed to load results. Try again later.</p>
-    <p v-else-if="state === 'empty'" class="subtitle">No votes yet. Head to the Voting tab to get started.</p>
+    <p v-else-if="state === 'empty'" class="subtitle">No votes yet. Head to the Maps tab to get started.</p>
 
     <table v-else class="leaderboard">
       <thead>

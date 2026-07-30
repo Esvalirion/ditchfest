@@ -6,7 +6,7 @@ import { RouterLink, useRoute } from 'vue-router';
 
 const NAV = [
   { name: 'signs', label: 'Signs' },
-  { name: 'voting', label: 'Voting' },
+  { name: 'maps', label: 'Maps' },
   { name: 'top-players', label: 'Players' },
   { name: 'top-mappers', label: 'Mappers' },
   { name: 'roadmap', label: 'Roadmap' },

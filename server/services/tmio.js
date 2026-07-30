@@ -77,4 +77,15 @@ function stripFormat(str) {
     .trim();
 }
 
-module.exports = { sleep, fetchFolderCampaigns, fetchCampaignMaps, stripFormat };
+/** Top N times for a map, newest first by position (1st place first). */
+async function fetchMapLeaderboard(mapUid, userAgent, length = 5) {
+  const data = await get(`/api/leaderboard/map/${mapUid}`, userAgent);
+  return (data.tops || []).slice(0, length).map((t) => ({
+    position: t.position,
+    time: t.time,
+    accountId: t.player && t.player.id,
+    name: t.player && stripFormat(t.player.name),
+  }));
+}
+
+module.exports = { sleep, fetchFolderCampaigns, fetchCampaignMaps, stripFormat, fetchMapLeaderboard };

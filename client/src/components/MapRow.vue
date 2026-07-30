@@ -4,6 +4,7 @@
      `voted` (its own myVotes Set) and gets an update via @voted; this
      component only knows about a single row. -->
 <script setup>
+import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
@@ -59,12 +60,7 @@ function onThumbError(e) {
       @error="onThumbError"
     />
     <div class="map-info">
-      <a
-        class="map-name"
-        :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
-        target="_blank"
-        rel="noopener"
-      >{{ map.name }}</a>
+      <RouterLink class="map-name" :to="{ name: 'map', params: { mapUid: map.mapUid } }">{{ map.name }}</RouterLink>
       <div class="map-author">{{ subtitle }}</div>
     </div>
     <button
