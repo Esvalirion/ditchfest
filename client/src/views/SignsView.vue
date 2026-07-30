@@ -76,20 +76,17 @@ async function copySrc(src) {
     >{{ f.label }}</button>
   </div>
 
-  <div
-    v-for="(group, key) in BOTTOM_FILTERS"
-    :key="key"
-    v-show="topFilter === key"
-    class="filter-buttons bottom-level"
-  >
-    <button
-      v-for="f in group"
-      :key="f.type"
-      class="filter-btn"
-      :class="{ active: bottomFilter === f.type }"
-      @click="setBottomFilter(f.type)"
-    >{{ f.label }}</button>
-  </div>
+  <template v-for="(group, key) in BOTTOM_FILTERS" :key="key">
+    <div v-if="topFilter === key" class="filter-buttons bottom-level">
+      <button
+        v-for="f in group"
+        :key="f.type"
+        class="filter-btn"
+        :class="{ active: bottomFilter === f.type }"
+        @click="setBottomFilter(f.type)"
+      >{{ f.label }}</button>
+    </div>
+  </template>
 
   <div class="gallery">
     <div
