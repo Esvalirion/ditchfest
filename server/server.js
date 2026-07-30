@@ -1,4 +1,6 @@
-require('dotenv').config();
+// quiet: true — dotenv >=17 otherwise prints a random promo tip on every
+// boot (one points at an unaffiliated "auth for agents" domain).
+require('dotenv').config({ quiet: true });
 
 const cron = require('node-cron');
 const { pool } = require('./db');

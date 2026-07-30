@@ -1,7 +1,7 @@
 // Dev-only fixture data — lets you smoke-test the API locally without a
 // real Nadeo campaign or real players. Not part of the deploy/migration
 // flow (001/002 above); run manually: `npm run seed` inside server/.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { pool } = require('../db');
 
 async function main() {
