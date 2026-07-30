@@ -112,6 +112,12 @@ async function toggleHidden(edition) {
 }
 
 async function deleteFolder(edition) {
+  const mapCount = mapsForColumn(edition.campaignId).length;
+  const warning = mapCount
+    ? `Delete "${edition.name}"? Its ${mapCount} map${mapCount === 1 ? '' : 's'} will go back to their real campaigns.`
+    : `Delete "${edition.name}"?`;
+  if (!window.confirm(warning)) return;
+
   deletingFolder.value = { ...deletingFolder.value, [edition.campaignId]: true };
   try {
     await api('/api/campaigns/delete', { body: { campaignId: edition.campaignId } });
