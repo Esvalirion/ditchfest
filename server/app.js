@@ -19,7 +19,13 @@ app.use(router);
 // where the client runs its own Vite dev server and proxies /api + /auth
 // here instead (see client/vite.config.js).
 const PUBLIC = path.join(__dirname, 'public');
-if (fs.existsSync(PUBLIC)) {
+const SERVES_CLIENT = fs.existsSync(PUBLIC);
+// routes/auth.js checks this to decide whether the post-login redirect goes
+// back to the domain the request came in on (prod, same origin serves API +
+// client — works for every domain this app is mirrored on) or to the fixed
+// TM_FRONTEND_URL (dev, separate Vite server on its own port).
+app.locals.servesClient = SERVES_CLIENT;
+if (SERVES_CLIENT) {
   app.use(express.static(PUBLIC));
   app.get('*path', (_req, res) => res.sendFile(path.join(PUBLIC, 'index.html')));
 }

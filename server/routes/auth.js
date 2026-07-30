@@ -16,8 +16,22 @@ function redirectUri(req) {
   return `${req.protocol}://${req.get('host')}/auth/callback`;
 }
 
-function redirectHome(res, params, extraHeaders) {
-  const base = TM_FRONTEND_URL.endsWith('/') ? TM_FRONTEND_URL : TM_FRONTEND_URL + '/';
+/** Where to send the user after /auth/callback. In prod this server also
+ *  serves the built client (req.app.locals.servesClient), so the right
+ *  answer is whatever domain the request actually came in on — this app is
+ *  mirrored on more than one (df.esvalirion.tech, ditchfest.su, ...) and a
+ *  fixed TM_FRONTEND_URL would always bounce back to just one of them. In
+ *  dev the client lives on Vite's own port, so TM_FRONTEND_URL is still the
+ *  only correct answer. */
+function frontendBase(req) {
+  if (req.app.locals.servesClient) {
+    return `${req.protocol}://${req.get('host')}/`;
+  }
+  return TM_FRONTEND_URL.endsWith('/') ? TM_FRONTEND_URL : TM_FRONTEND_URL + '/';
+}
+
+function redirectHome(req, res, params, extraHeaders) {
+  const base = frontendBase(req);
   if (extraHeaders) res.set(extraHeaders);
   res.redirect(`${base}#${new URLSearchParams(params)}`);
 }
@@ -43,7 +57,7 @@ router.get('/callback', async (req, res) => {
   const cookieState = readCookie(req, STATE_COOKIE);
 
   if (!code || !state || !cookieState || state !== cookieState) {
-    return redirectHome(res, { tm_error: 'invalid_state' });
+    return redirectHome(req, res, { tm_error: 'invalid_state' });
   }
 
   try {
@@ -58,12 +72,12 @@ router.get('/callback', async (req, res) => {
       console.error('first_login grant failed', String(e));
     }
 
-    redirectHome(res, { tm_token: token }, {
+    redirectHome(req, res, { tm_token: token }, {
       'Set-Cookie': `${STATE_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
     });
   } catch (err) {
     console.error('[auth/callback]', err);
-    redirectHome(res, { tm_error: 'server_error' });
+    redirectHome(req, res, { tm_error: 'server_error' });
   }
 });
 
