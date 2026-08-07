@@ -1,13 +1,35 @@
 <!-- Ported from top-mappers.html + js/mappers.js. -->
 <script setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '../utils/api';
+
+// Sort categories — default stays 'votes' (Rating). Adding an entry here plus
+// the matching field in the SQL is all it takes to grow a new category.
+const SORT_OPTIONS = [
+  { key: 'votes', label: 'Most Liked', metric: 'votes' },
+  { key: 'maps', label: 'Map Count', metric: 'maps' },
+];
 
 const router = useRouter();
 
 const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
 const mappers = ref([]);
+const sortKey = ref('votes');
+
+const activeOption = computed(
+  () => SORT_OPTIONS.find((o) => o.key === sortKey.value) ?? SORT_OPTIONS[0],
+);
+
+// Backend returns the list ordered by votes; the client re-sorts locally when
+// the user picks another category. Rank is always the post-sort array index.
+const displayedMappers = computed(() => {
+  const metric = activeOption.value.metric;
+  return [...mappers.value].sort((a, b) => {
+    if (b[metric] !== a[metric]) return b[metric] - a[metric];
+    return (a.name || '').localeCompare(b.name || '');
+  });
+});
 
 async function load() {
   state.value = 'loading';
@@ -37,35 +59,75 @@ onMounted(load);
     <p v-else-if="state === 'error'" class="subtitle">Failed to load results. Try again later.</p>
     <p v-else-if="state === 'empty'" class="subtitle">No votes yet. Head to the Maps tab to get started.</p>
 
-    <table v-else class="leaderboard">
-      <thead>
-        <tr>
-          <th class="lb-rank">#</th>
-          <th>Mapper</th>
-          <th class="lb-votes">Votes</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="(m, i) in mappers"
-          :key="m.accountId"
-          class="lb-link"
-          @click="goToMapper(m, $event)"
-        >
-          <td class="lb-rank">{{ i + 1 }}</td>
-          <td>
-            <RouterLink class="lb-name" :to="{ name: 'mapper', params: { id: m.accountId } }">
-              {{ m.name || 'Unknown mapper' }}
-            </RouterLink>
-          </td>
-          <td class="lb-votes">{{ m.votes }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <template v-else>
+      <div class="filter-buttons">
+        <button
+          v-for="opt in SORT_OPTIONS"
+          :key="opt.key"
+          class="filter-btn"
+          :class="{ active: sortKey === opt.key }"
+          @click="sortKey = opt.key"
+        >{{ opt.label }}</button>
+      </div>
+
+      <table class="leaderboard">
+        <thead>
+          <tr>
+            <th class="lb-rank">#</th>
+            <th>Mapper</th>
+            <th class="lb-votes">{{ activeOption.label }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="(m, i) in displayedMappers"
+            :key="m.accountId"
+            class="lb-link"
+            @click="goToMapper(m, $event)"
+          >
+            <td class="lb-rank">{{ i + 1 }}</td>
+            <td>
+              <RouterLink class="lb-name" :to="{ name: 'mapper', params: { id: m.accountId } }">
+                {{ m.name || 'Unknown mapper' }}
+              </RouterLink>
+            </td>
+            <td class="lb-votes">{{ m[activeOption.metric] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.filter-buttons {
+  margin: 20px auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 10px;
+  max-width: 640px;
+}
+
+.filter-btn {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 22px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border 0.15s;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-text-bright);
+}
+
 .leaderboard {
   max-width: 640px;
   margin: 30px auto;
