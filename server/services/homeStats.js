@@ -123,11 +123,12 @@ async function getTopMaps(campaignId, limit) {
     SELECT m.map_uid AS "mapUid",
            m.name,
            m.author_name AS "authorName",
+           m.thumbnail_url AS "thumbnailUrl",
            COUNT(DISTINCT v.map_uid || '|' || ${voterCanon})::int AS votes
     FROM maps m
     LEFT JOIN votes v ON v.map_uid = m.map_uid
     WHERE ${EFFECTIVE_CAMPAIGN} = $1
-    GROUP BY m.map_uid, m.name, m.author_name
+    GROUP BY m.map_uid, m.name, m.author_name, m.thumbnail_url
     ORDER BY votes DESC, m.name ASC
     LIMIT $2
   `,
