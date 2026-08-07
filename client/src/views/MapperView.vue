@@ -5,7 +5,7 @@
      your own adds logout and, for admins, the way into the admin panel; to
      everyone else it looks like any other account page. -->
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
@@ -18,6 +18,15 @@ const session = useSessionStore();
 const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const mapper = ref(null);
 const myVotes = ref(new Set());
+
+// Linked accounts' nicknames, comma-joined — null when there are none, so the
+// template can skip the whole "(...)" span. alts comes from the API already
+// empty for an unlinked account.
+const altNames = computed(() => {
+  const alts = mapper.value?.alts;
+  if (!alts || !alts.length) return null;
+  return alts.map((a) => a.displayName || a.accountId).join(', ');
+});
 
 function isOwner(accountId) {
   return session.isLoggedIn && session.user.accountId === accountId;
@@ -88,7 +97,10 @@ watch(() => route.params.id, load, { immediate: true });
 
     <template v-else-if="mapper">
       <div class="mapper-card">
-        <h1 class="mapper-name">{{ mapper.name || 'Unknown player' }}</h1>
+        <h1 class="mapper-name">
+          {{ mapper.name || 'Unknown player' }}
+          <span v-if="altNames" class="mapper-alts">({{ altNames }})</span>
+        </h1>
 
         <div class="mapper-stats">
           <div class="mapper-stat">
@@ -160,6 +172,12 @@ watch(() => route.params.id, load, { immediate: true });
   color: var(--color-text-bright);
   font-size: 1.8rem;
   overflow-wrap: anywhere;
+}
+
+.mapper-alts {
+  color: var(--color-text-dim);
+  font-size: 1rem;
+  font-weight: normal;
 }
 
 .mapper-stats {

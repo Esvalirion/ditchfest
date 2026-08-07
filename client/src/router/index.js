@@ -29,6 +29,12 @@ const routes = [
     component: () => import('../views/AdminCampaignsView.vue'),
     meta: { navGroup: 'admin' },
   },
+  {
+    path: '/admin/links',
+    name: 'admin-links',
+    component: () => import('../views/AdminLinksView.vue'),
+    meta: { navGroup: 'admin' },
+  },
 ];
 
 export default createRouter({

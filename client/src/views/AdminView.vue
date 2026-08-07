@@ -93,9 +93,10 @@ load();
     <p v-else-if="state === 'error'" class="subtitle">Failed to load. Try again later.</p>
 
     <template v-else-if="state === 'ready'">
-      <p class="admin-nav-link">
+      <div class="admin-nav-link">
         <RouterLink :to="{ name: 'admin-campaigns' }">Manage campaigns →</RouterLink>
-      </p>
+        <RouterLink :to="{ name: 'admin-links' }">Linked accounts →</RouterLink>
+      </div>
 
       <div class="admin-card">
         <label class="admin-label">Add admin by Ubisoft account ID</label>
@@ -135,7 +136,10 @@ load();
 .admin-nav-link {
   max-width: 560px;
   margin: 0 auto 16px auto;
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .admin-nav-link a {
