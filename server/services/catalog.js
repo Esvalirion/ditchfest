@@ -31,6 +31,12 @@ async function upsertMap({ mapUid, campaignId, name, authorAccountId, authorName
   );
 }
 
+// The two functions below touch the migration-007 columns (tmx_style/
+// tmx_tags/tmx_styles_updated_at). They're only called from the catalog sync,
+// whose TMX-style sweep is wrapped in try/catch — so a DB without 007 yet
+// logs an error each run but doesn't break the sync. Harmless noise that
+// disappears once 007 is applied.
+
 /** Persist a map's TMX style/tags, separately from the catalog upsert. The
  *  catalog sync (services/sync.js) calls this after a TMX lookup; passing
  *  null style+tags is a valid "confirmed not on TMX" result and still stamps

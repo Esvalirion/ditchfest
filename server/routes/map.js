@@ -14,17 +14,20 @@ const router = Router();
 router.get('/map/:mapUid', optionalAuth, async (req, res) => {
   const { mapUid } = req.params;
 
-  const { rows } = await pool.query(
-    `SELECT m.map_uid, m.name, m.author_account_id, m.author_name, m.thumbnail_url,
-            m.campaign_id, e.name AS edition_name,
-            m.tmx_style, m.tmx_tags, m.tmx_styles_updated_at,
-            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
-               WHERE v.map_uid = m.map_uid) AS votes
-     FROM maps m
-     JOIN editions e ON e.campaign_id = m.campaign_id
-     WHERE m.map_uid = $1`,
-    [mapUid]
-  );
+  // Migration 007 adds the tmx_* style columns; if it hasn't been applied on
+  // this DB yet, the query errors on the missing columns and the whole page
+  // dies. Retry without them and degrade to no style chips. Dead code once
+  // 007 is applied everywhere.
+  let rows;
+  try {
+    rows = (await pool.query(mapQuery(true), [mapUid])).rows;
+  } catch (e) {
+    if (e && (e.code === '42703' || /does not exist/i.test(String(e.message || '')))) {
+      rows = (await pool.query(mapQuery(false), [mapUid])).rows;
+    } else {
+      throw e;
+    }
+  }
   if (rows.length === 0) return res.status(404).json({ error: 'unknown_map' });
   const map = rows[0];
 
@@ -99,3 +102,20 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
 });
 
 module.exports = router;
+
+/** The one-map query, with or without the migration-007 style columns.
+ *  Identical apart from those three columns so the two paths can't drift. */
+function mapQuery(withStyles) {
+  const styleCols = withStyles
+    ? 'm.tmx_style, m.tmx_tags, m.tmx_styles_updated_at,'
+    : '';
+  return `
+    SELECT m.map_uid, m.name, m.author_account_id, m.author_name, m.thumbnail_url,
+           m.campaign_id, e.name AS edition_name,
+           ${styleCols}
+           (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
+              WHERE v.map_uid = m.map_uid) AS votes
+     FROM maps m
+     JOIN editions e ON e.campaign_id = m.campaign_id
+     WHERE m.map_uid = $1`;
+}

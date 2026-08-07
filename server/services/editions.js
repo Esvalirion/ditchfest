@@ -30,7 +30,49 @@ async function getEditions() {
   // readable names. Empty on a TMX outage → tags just stay blank, style still
   // shows.
   const tagTable = await getTagsTable(TMIO_USER_AGENT);
-  const { rows } = await pool.query(`
+  // The style columns (tmx_style/tmx_tags/tmx_styles_updated_at) are added by
+  // migration 007. If that migration hasn't been applied yet, the query below
+  // would error out on the missing columns and take the whole catalog with
+  // it — so we retry the same query without them and degrade to no style
+  // chips instead. Once 007 is applied everywhere this fallback is dead code.
+  let rows;
+  try {
+    rows = (await pool.query(editionsQuery(true))).rows;
+  } catch (e) {
+    if (isMissingColumnError(e)) {
+      rows = (await pool.query(editionsQuery(false))).rows;
+    } else {
+      throw e;
+    }
+  }
+  return rows.map((e) => ({
+    campaignId: e.campaign_id,
+    name: e.name,
+    media: e.media,
+    theme: e.theme,
+    maps: e.maps.map((m) => buildMapStyles(m, tagTable)),
+  }));
+}
+
+/** True for a Postgres "column … does not exist" error — the exact failure
+ *  when migration 007 hasn't been applied but the code already references the
+ *  style columns. SQLSTATE 42703 = undefined_column. */
+function isMissingColumnError(e) {
+  if (e && e.code === '42703') return true;
+  return /does not exist/i.test(String((e && e.message) || ''));
+}
+
+/** The editions query, with or without the TMX style columns. withStyles is
+ *  the migration-007 path; the no-styles variant omits the three style fields
+ *  from json_build_object and is otherwise identical (kept in one place so the
+ *  two can't drift). */
+function editionsQuery(withStyles) {
+  const styleFields = withStyles
+    ? `'style', m.tmx_style,
+            'tagsRaw', m.tmx_tags,
+            'tmxCheckedAt', m.tmx_styles_updated_at,`
+    : '';
+  return `
     SELECT
       e.campaign_id,
       COALESCE(e.display_name, e.name) AS name,
@@ -45,9 +87,7 @@ async function getEditions() {
             'author', m.author_account_id,
             'authorName', m.author_name,
             'thumbnailUrl', m.thumbnail_url,
-            'style', m.tmx_style,
-            'tagsRaw', m.tmx_tags,
-            'tmxCheckedAt', m.tmx_styles_updated_at,
+            ${styleFields}
             'votes', (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
                         WHERE v.map_uid = m.map_uid)
           ) ORDER BY m.position ASC NULLS LAST, m.name ASC
@@ -66,14 +106,7 @@ async function getEditions() {
       -- actually stashed in it, so it doesn't sink to the bottom under
       -- every real edition ever synced.
       GREATEST(e.campaign_id, MAX(m.campaign_id)) DESC
-  `);
-  return rows.map((e) => ({
-    campaignId: e.campaign_id,
-    name: e.name,
-    media: e.media,
-    theme: e.theme,
-    maps: e.maps.map((m) => buildMapStyles(m, tagTable)),
-  }));
+  `;
 }
 
 /** Expands a map's stored TMX columns into the shape the client renders.
