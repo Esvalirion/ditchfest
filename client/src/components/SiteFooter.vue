@@ -22,6 +22,15 @@ const DISCORDS = [
         <img class="discord-icon" src="/res/discord-sign-logo.svg" alt="" />
         <span>{{ d.label }}</span>
       </a>
+      <a
+        class="discord-link-item"
+        href="https://github.com/Esvalirion/ditchfest"
+        target="_blank"
+        rel="noopener"
+      >
+        <img class="discord-icon" src="/res/github.svg" alt="" />
+        <span>Github</span>
+      </a>
     </div>
     <p class="developer-info">Credits: onrd.., Soba, Rezzn, DamnedLight, esvalirion</p>
     <div class="copyright">Fuck you ditchfest mappers © 2025-2026</div>

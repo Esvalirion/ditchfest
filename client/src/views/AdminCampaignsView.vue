@@ -181,20 +181,21 @@ function onColumnDragEnd() {
 // sort_order works like z-index: any number is a valid position, and moving
 // one column only ever writes that column's own value — no renumbering the
 // rest of the board (which is what made the old /campaigns/reorder tie the
-// position field's range to the current campaign count). ORDER_GAP is just
-// the spacing used when *inventing* a number (for a column that has no
-// sort_order yet, or when dragging leaves no room between two neighbors);
-// it has no meaning once a value is persisted.
+// position field's range to the current campaign count). The board itself
+// sorts weight DESC (newest campaigns carry the highest weight), and
+// ORDER_GAP is just the spacing used when *inventing* a number (for a column
+// that has no sort_order yet, or when dragging leaves no room between two
+// neighbors); it has no meaning once a value is persisted.
 const ORDER_GAP = 1000;
 
-// Mirrors the API's ORDER BY (sort_order IS NULL), sort_order ASC,
+// Mirrors the API's ORDER BY (sort_order IS NULL), sort_order DESC,
 // campaign_id DESC exactly, so a locally-resorted list matches what a fresh
 // load() would return.
 function bySortOrder(a, b) {
   const aNull = a.sortOrder == null;
   const bNull = b.sortOrder == null;
   if (aNull !== bNull) return aNull ? 1 : -1;
-  if (!aNull && a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  if (!aNull && a.sortOrder !== b.sortOrder) return b.sortOrder - a.sortOrder;
   return b.campaignId - a.campaignId;
 }
 
@@ -231,9 +232,12 @@ async function reorderColumns(draggedId, targetId) {
   const draggedIdx = ids.indexOf(draggedId);
   if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx - 1) return;
 
+  // The board sorts weight DESC (highest first), so "before target" is the
+  // higher-value neighbor and "insert at the very top" means going above the
+  // current top — i.e. adding ORDER_GAP rather than subtracting it.
   const before = targetIdx > 0 ? effectiveOrder(targetIdx - 1) : null;
   const after = effectiveOrder(targetIdx);
-  const newValue = before === null ? after - ORDER_GAP : (before + after) / 2;
+  const newValue = before === null ? after + ORDER_GAP : (before + after) / 2;
 
   const edition = editions.value.find((e) => e.campaignId === draggedId);
   await persistPosition(edition, newValue);

@@ -3,10 +3,14 @@
 // reference, not duplicated in this repo — see COTD_MIGRATION_PLAN.md).
 const { pool } = require('../db');
 
+// New editions are assigned sort_order = MAX(sort_order)+1 at first sync, so
+// the board shows campaigns newest-first (high weight → low weight) without an
+// admin having to touch them. On conflict the UPDATE branch deliberately does
+// NOT set sort_order — a re-sync must never overwrite a value an admin moved.
 async function upsertEdition({ campaignId, name, media, position }) {
   await pool.query(
-    `INSERT INTO editions (campaign_id, name, media, position, updated_at)
-     VALUES ($1, $2, $3, $4, now())
+    `INSERT INTO editions (campaign_id, name, media, position, sort_order, updated_at)
+     VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM editions), now())
      ON CONFLICT (campaign_id) DO UPDATE SET
        name = EXCLUDED.name, media = EXCLUDED.media,
        position = EXCLUDED.position, updated_at = now()`,

@@ -1,9 +1,10 @@
-// Shared by routes/editions.js (as-is, newest first) and routes/onboarding.js
-// (filtered + reversed) so both pages read the exact same catalog.
+// Shared by routes/editions.js (as-is, newest/high-weight first) and
+// routes/onboarding.js (reversed to walk history forward) so both pages read
+// the exact same catalog.
 const { pool } = require('../db');
 const { canon } = require('./links');
 
-/** Editions (newest first) with their maps and per-map vote counts.
+/** Editions (newest/high-weight first) with their maps and per-map vote counts.
  *  campaign_id is assigned by Nadeo in creation order, so it's a reliable
  *  chronological key — the folder "position" field is not.
  *
@@ -17,11 +18,10 @@ const { canon } = require('./links');
  *  maps this way (or not yet synced), are dropped: neither is useful to
  *  show or to walk through in onboarding.
  *
- *  Order is sort_order (set by /api/campaigns/position) when an admin has
- *  arranged the board, then the chronological rule below for everything
- *  else — so newly-synced editions the admin hasn't touched yet still slot
- *  in after the manually-arranged ones instead of vanishing to wherever
- *  their id would otherwise place them. */
+ *  Order is sort_order DESC (newest campaigns have the highest weight — new
+ *  editions get MAX(sort_order)+1 at first sync, see services/catalog.js),
+ *  then editions with no sort_order yet, ranked chronologically below the
+ *  weighted ones. */
 async function getEditions() {
   const { rows } = await pool.query(`
     SELECT
@@ -50,7 +50,7 @@ async function getEditions() {
     GROUP BY e.campaign_id
     HAVING COUNT(m.map_uid) > 0
     ORDER BY
-      (e.sort_order IS NULL), e.sort_order ASC,
+      (e.sort_order IS NULL), e.sort_order DESC,
       -- An admin-created folder (negative campaign_id) has no chronology of
       -- its own — rank it by the newest real campaign among the maps
       -- actually stashed in it, so it doesn't sink to the bottom under

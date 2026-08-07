@@ -20,8 +20,10 @@ async function getOnboardingDone(members) {
 router.get('/onboarding', requireAuth, async (req, res) => {
   const members = await groupMembers(req.accountId);
 
-  // getEditions() is newest-first (and already drops empty editions);
-  // onboarding walks history forward instead.
+  // getEditions() is display-sorted (newest/high-weight first); onboarding
+  // walks history forward instead, so reverse it. (This mirrors the catalog's
+  // notion of recency rather than a strict Nadeo-id timeline, keeping virtual
+  // folders in their catalog position rather than pinned to the front.)
   const editions = (await getEditions()).reverse();
 
   const done = await getOnboardingDone(members);

@@ -13,7 +13,9 @@ const STATE_COOKIE = 'tm_oauth_state';
  *  correct on every domain the app is served from — not the same as
  *  TM_FRONTEND_URL, which is where the user goes *afterwards*. */
 function redirectUri(req) {
-  return `${req.protocol}://${req.get('host')}/auth/callback`;
+  const uri = `${req.protocol}://${req.get('host')}/auth/callback`;
+  console.log('[debug redirectUri]', uri, '| x-forwarded-host:', req.get('x-forwarded-host'), '| x-forwarded-proto:', req.get('x-forwarded-proto'));
+  return uri;
 }
 
 /** Where to send the user after /auth/callback. In prod this server also

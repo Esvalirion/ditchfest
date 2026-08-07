@@ -33,7 +33,7 @@ router.get('/campaigns', requireAdmin, async (_req, res) => {
     FROM editions e
     LEFT JOIN maps m ON m.campaign_id = e.campaign_id
     GROUP BY e.campaign_id
-    ORDER BY (e.sort_order IS NULL), e.sort_order ASC, e.campaign_id DESC
+    ORDER BY (e.sort_order IS NULL), e.sort_order DESC, e.campaign_id DESC
   `);
 
   res.json({
@@ -78,10 +78,10 @@ router.post('/campaigns/position', requireAdmin, async (req, res) => {
 // Nadeo campaign behind it, for stashing maps that don't fit anywhere real
 // (see the negative-id sequence in 004_campaign_folders.sql). Starts empty
 // and hidden from the public site until maps actually land in it (getEditions
-// drops empty editions on its own). sort_order is set below the current
-// minimum so it sorts first (leftmost) on the board — otherwise it'd fall
-// back to campaign_id DESC, and a virtual folder's negative id would sink
-// to the very end.
+// drops empty editions on its own). sort_order is set above the current
+// maximum so it sorts first (the board is weight DESC, highest first) —
+// otherwise it'd fall back to campaign_id DESC, and a virtual folder's
+// negative id would sink to the very end.
 router.post('/campaigns', requireAdmin, async (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'missing_name' });
@@ -91,7 +91,7 @@ router.post('/campaigns', requireAdmin, async (req, res) => {
      VALUES (
        nextval('editions_virtual_id_seq'),
        $1,
-       (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM editions)
+       (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM editions)
      )
      RETURNING campaign_id`,
     [name]
