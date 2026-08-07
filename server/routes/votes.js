@@ -34,7 +34,7 @@ router.post('/vote', requireAuth, async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT COUNT(DISTINCT ${canon('account_id')})::int AS c FROM votes WHERE map_uid = $1`,
+    `SELECT COUNT(DISTINCT ${canon('v.account_id')})::int AS c FROM votes v WHERE v.map_uid = $1`,
     [mapUid]
   );
 
@@ -59,9 +59,14 @@ router.get('/map-voters', async (req, res) => {
   const mapExists = await pool.query('SELECT 1 FROM maps WHERE map_uid = $1', [mapUid]);
   if (mapExists.rowCount === 0) return res.status(404).json({ error: 'unknown_map' });
 
+  // canon() needs the column prefixed by the votes table alias: without one,
+  // the correlated subquery it builds reads `account_id = account_id` against
+  // account_links, which is always true — collapsing every voter into the
+  // first linked primary_id once account_links has any rows. See the same
+  // pattern in services/editions.js (canon('v.account_id')).
   const { rows } = await pool.query(
-    `SELECT ${canon('account_id')} AS account_id, MIN(created_at) AS created_at
-     FROM votes WHERE map_uid = $1 GROUP BY 1 ORDER BY created_at ASC`,
+    `SELECT ${canon('v.account_id')} AS account_id, MIN(v.created_at) AS created_at
+     FROM votes v WHERE v.map_uid = $1 GROUP BY 1 ORDER BY created_at ASC`,
     [mapUid]
   );
 

@@ -46,15 +46,15 @@ async function refreshAccount(canonicalId, members, rank) {
 
 async function getMapCounts() {
   const { rows } = await pool.query(`
-    SELECT ${canon('author_account_id')} AS id, COUNT(*)::int AS n FROM maps
-    WHERE author_account_id IS NOT NULL GROUP BY 1
+    SELECT ${canon('m.author_account_id')} AS id, COUNT(*)::int AS n FROM maps m
+    WHERE m.author_account_id IS NOT NULL GROUP BY 1
   `);
   return new Map(rows.map((r) => [r.id, r.n]));
 }
 
 async function getVoteCastCounts() {
   const { rows } = await pool.query(`
-    SELECT ${canon('account_id')} AS id, COUNT(DISTINCT map_uid)::int AS n FROM votes GROUP BY 1
+    SELECT ${canon('v.account_id')} AS id, COUNT(DISTINCT v.map_uid)::int AS n FROM votes v GROUP BY 1
   `);
   return new Map(rows.map((r) => [r.id, r.n]));
 }
@@ -72,7 +72,7 @@ async function getSelfVoteCounts() {
 }
 
 async function getAllAchievementPairs() {
-  const { rows } = await pool.query(`SELECT DISTINCT ${canon('account_id')} AS id, code FROM achievements`);
+  const { rows } = await pool.query(`SELECT DISTINCT ${canon('a.account_id')} AS id, code FROM achievements a`);
   return new Set(rows.map((r) => `${r.id}:${r.code}`));
 }
 
