@@ -7,11 +7,11 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 
 const BASE_NAV = [
+  { name: 'home', label: 'Main' },
   { name: 'signs', label: 'Signs' },
   { name: 'maps', label: 'Maps' },
   { name: 'top-players', label: 'Players' },
   { name: 'top-mappers', label: 'Mappers' },
-  { name: 'roadmap', label: 'Roadmap' },
 ];
 
 const route = useRoute();

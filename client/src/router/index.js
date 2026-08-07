@@ -4,7 +4,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 // highlight one — the replacement for BELONGS_TO in the old js/layout.js
 // (there only mapper.html -> top-mappers.html).
 const routes = [
-  { path: '/', name: 'signs', component: () => import('../views/SignsView.vue') },
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+  { path: '/signs', name: 'signs', component: () => import('../views/SignsView.vue') },
   { path: '/maps', name: 'maps', component: () => import('../views/MapsView.vue') },
   { path: '/top-players', name: 'top-players', component: () => import('../views/TopPlayersView.vue') },
   { path: '/top-mappers', name: 'top-mappers', component: () => import('../views/TopMappersView.vue') },
