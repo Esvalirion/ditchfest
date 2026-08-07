@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
             </header>
 
           <div v-if="stats.latest.topMaps.length" class="latest-section">
-            <h3 class="section-title">Top maps</h3>
+            <h3 class="section-title">Top edition maps</h3>
             <ol class="top-maps">
               <li v-for="m in stats.latest.topMaps" :key="m.mapUid" class="top-map">
                 <RouterLink class="top-map-name" :to="{ name: 'map', params: { mapUid: m.mapUid } }">
@@ -298,7 +298,7 @@ onBeforeUnmount(() => {
           </div>
 
             <div v-if="stats.latest.topMapper" class="latest-section">
-              <h3 class="section-title">Top ditchfest mapper</h3>
+              <h3 class="section-title">Top edition mapper</h3>
               <RouterLink
                 class="top-mapper"
                 :to="{ name: 'mapper', params: { id: stats.latest.topMapper.accountId } }"
