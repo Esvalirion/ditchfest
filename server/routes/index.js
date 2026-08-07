@@ -3,6 +3,7 @@ const { Router } = require('express');
 const router = Router();
 
 router.use('/auth', require('./auth'));
+router.use('/api', require('./home'));
 router.use('/api', require('./editions'));
 router.use('/api', require('./votes'));
 router.use('/api', require('./map'));
