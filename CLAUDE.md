@@ -54,7 +54,7 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 | `services/achievements.js` | каталог ачивок + `earnedFromStats()` |
 | `services/grants.js` | выдача статистических ачивок (`refreshAccount`, `refreshEveryone`) |
 | `services/sync.js`, `tmio.js`, `catalog.js` | синк каталога с trackmania.io каждые 30 мин; `tmio.js` также отдаёт топ-5 таймов карты для `routes/map.js` |
-| `services/tmx.js` | поиск карты на Trackmania Exchange по `map_uid` — best-effort, не все карты там есть |
+| `services/tmx.js` | поиск карты на Trackmania Exchange по `map_uid` + её стиль/теги (StyleName + раскрытие числовых ID тегов через кешируемую таблицу `/api/meta/tags`) — best-effort, не все карты там есть |
 | `services/names.js` | accountId → ник через TM OAuth (client credentials) |
 | `db.js` | `pg.Pool`, `DATABASE_URL` |
 
@@ -111,6 +111,49 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 **Грабли: у trackmania.io мягкий рейт-лимит (~2 req/s).** Ручные повторные
 прогоны подряд (чаще раз в минуту) словят `sync_failed` — это не баг кода,
 подождать хотя бы 60 секунд между ручными прогонами.
+
+## Стили карт с TMX (`services/tmx.js`, `services/editions.js`, `routes/map.js`)
+
+Под подписью автора карты (`by …`) рисуются маленькие цветные теги стилей
+(компонент `client/src/components/StyleTags.vue`) — во всех трёх местах:
+каталог/голосование (`MapRow`), onboarding и страница одной карты. Источник —
+TMX. Не все Ditchfest-карты там выложены (многие — Discord-only мемы), и это
+**нормальный сценарий**: для подтверждённо отсутствующей на TMX карты рисуется
+одна серая карточка «Not on TMX».
+
+TMX API хранит стиль и теги по-разному, и это важно при правках:
+- `StyleName` — читаемая строка (`"SpeedMapping"`, `"Tech"`…).
+- `Tags` — **числовые ID через запятую** (`"60,12,1"`), НЕ названия. ID→название
+  (и цвет) берутся с `/api/meta/tags`, таблица из ~70 тегов; кешируется
+  in-process на 24ч (`getTagsTable` в `services/tmx.js`), чтобы не дёргать на
+  каждую карту. При сбое TMX таблица остаётся пустой → теги просто не
+  раскроются, стиль всё равно покажется.
+
+Чтобы каталог не делал N TMX-запросов на каждый просмотр страницы, стили
+**кешируются в БД** (колонки `maps.tmx_style` / `tmx_tags` / `tmx_styles_updated_at`,
+миграция `007_map_styles.sql`) — их заполняет тот же прогон синка:
+`services/sync.js` ротационно refreshing по `MAX_TMX_STYLES_PER_RUN` (12) карт
+за прогон через `getMapsMissingTmxStyles()` (наименее свежие / вообще не
+проверенные). `tmx_tags` хранится **сырой строкой ID** (`"60,12,1"`), а не
+раскрытыми названиями — так обновление таблицы тегов потом переразрешит имена
+без нового TMX-фетча.
+
+Семантика `tmx_styles_updated_at`: заполненная дата с пустыми `tmx_style` И
+`tmx_tags` = «подтверждённо не на TMX» — синк её не переспрашивает каждый
+прогон (только когда протухнет, 30 дней). При сетевой ошибке TMX таймстемп **не
+трогается**, чтобы карта попала на повтор в следующем прогоне. `upsertMap` в
+`catalog.js` эти колонки намеренно не пишет — ими управляет только
+`updateMapTmxStyles()`, иначе каждый прогон синка обнулял бы стили у карт не из
+текущего батча.
+
+Каталог (`services/editions.js` `getEditions()`) раскрывает ID тегов в
+`{name,color}` одним вызовом `getTagsTable` на весь каталог и отдаёт в каждой
+карте `style`/`tags`/`onTmx`. Страница одной карты (`routes/map.js`) берёт стили
+из live-lookup (TMX там и так дёргается на каждый запрос) с fallback на
+сохранённые в БД колонки — транзитный сбой TMX не обнуляет теги. `onTmx: false`
+только при подтверждённом отсутствии (live null или синк-таймстемп + пустые
+колонки); для ещё не проверенной карты `onTmx: true`, и «Not on TMX» не
+рисуется.
 
 ## Кампании-«папки» и переопределения (`routes/campaigns.js`, `services/editions.js`)
 

@@ -3,6 +3,8 @@
 // the exact same catalog.
 const { pool } = require('../db');
 const { canon } = require('./links');
+const { getTagsTable, parseTagIds } = require('./tmx');
+const { TMIO_USER_AGENT } = require('../config');
 
 /** Editions (newest/high-weight first) with their maps and per-map vote counts.
  *  campaign_id is assigned by Nadeo in creation order, so it's a reliable
@@ -23,6 +25,11 @@ const { canon } = require('./links');
  *  then editions with no sort_order yet, ranked chronologically below the
  *  weighted ones. */
 async function getEditions() {
+  // The tag id→{name,color} table is cached in-process (see services/tmx.js);
+  // resolve it once here so each map's raw "60,12,1" tag string expands to
+  // readable names. Empty on a TMX outage → tags just stay blank, style still
+  // shows.
+  const tagTable = await getTagsTable(TMIO_USER_AGENT);
   const { rows } = await pool.query(`
     SELECT
       e.campaign_id,
@@ -38,6 +45,9 @@ async function getEditions() {
             'author', m.author_account_id,
             'authorName', m.author_name,
             'thumbnailUrl', m.thumbnail_url,
+            'style', m.tmx_style,
+            'tagsRaw', m.tmx_tags,
+            'tmxCheckedAt', m.tmx_styles_updated_at,
             'votes', (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
                         WHERE v.map_uid = m.map_uid)
           ) ORDER BY m.position ASC NULLS LAST, m.name ASC
@@ -62,8 +72,33 @@ async function getEditions() {
     name: e.name,
     media: e.media,
     theme: e.theme,
-    maps: e.maps,
+    maps: e.maps.map((m) => buildMapStyles(m, tagTable)),
   }));
+}
+
+/** Expands a map's stored TMX columns into the shape the client renders.
+ *  - style: readable StyleName or null.
+ *  - tags:  [{name,color}] expanded from the raw id string.
+ *  - onTmx: false only when we have *confirmed* (tmxCheckedAt set) the map is
+ *           NOT on TMX; true otherwise (on TMX, or not yet checked). The
+ *           client shows a "Not on TMX" chip exactly in the confirmed-absent
+ *           case, never for still-pending maps. */
+function buildMapStyles(m, tagTable) {
+  const style = m.style || null;
+  const tags = parseTagIds(m.tagsRaw, tagTable);
+  const checked = !!m.tmxCheckedAt;
+  const onTmx = !(checked && style == null && tags.length === 0);
+  return {
+    mapUid: m.mapUid,
+    name: m.name,
+    author: m.author,
+    authorName: m.authorName,
+    thumbnailUrl: m.thumbnailUrl,
+    votes: m.votes,
+    style,
+    tags,
+    onTmx,
+  };
 }
 
 module.exports = { getEditions };

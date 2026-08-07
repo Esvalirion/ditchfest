@@ -3,7 +3,7 @@ const { pool } = require('../db');
 const { optionalAuth } = require('../middleware/auth');
 const { canon, groupMembers } = require('../services/links');
 const { fetchMapLeaderboard } = require('../services/tmio');
-const { lookupMapByUid } = require('../services/tmx');
+const { lookupMapByUid, parseTagIds, getTagsTable } = require('../services/tmx');
 const { TMIO_USER_AGENT } = require('../config');
 
 const router = Router();
@@ -17,6 +17,7 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
   const { rows } = await pool.query(
     `SELECT m.map_uid, m.name, m.author_account_id, m.author_name, m.thumbnail_url,
             m.campaign_id, e.name AS edition_name,
+            m.tmx_style, m.tmx_tags, m.tmx_styles_updated_at,
             (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
                WHERE v.map_uid = m.map_uid) AS votes
      FROM maps m
@@ -38,16 +39,45 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     voted = r.rowCount > 0;
   }
 
-  const [leaderboard, tmx] = await Promise.all([
+  // The TMX lookup either resolves to an info object, to null ("confirmed not
+  // on TMX"), or throws (network/5xx → caught → tmxLookupFailed=true). Keep
+  // that distinction: a confirmed null is authoritative, a failure should
+  // fall through to the synced columns instead of silently reading as "not on
+  // TMX".
+  let tmx = null;
+  let tmxLookupFailed = false;
+  const [leaderboard] = await Promise.all([
     fetchMapLeaderboard(mapUid, TMIO_USER_AGENT, 5).catch((e) => {
       console.error('tmio leaderboard fetch failed', String(e));
       return null;
     }),
-    lookupMapByUid(mapUid, TMIO_USER_AGENT).catch((e) => {
-      console.error('tmx lookup failed', String(e));
-      return null;
-    }),
+    lookupMapByUid(mapUid, TMIO_USER_AGENT)
+      .then((r) => {
+        tmx = r;
+      })
+      .catch((e) => {
+        console.error('tmx lookup failed', String(e));
+        tmxLookupFailed = true;
+      }),
   ]);
+
+  // Style/tags prefer the live TMX lookup; if that failed (network) or the
+  // map isn't on TMX, fall back to whatever the catalog sync last persisted —
+  // so a transient TMX outage doesn't blank the chips.
+  let style = (tmx && tmx.style) || map.tmx_style || null;
+  let tags = tmx ? tmx.tags : null;
+  if (!tags && map.tmx_tags) {
+    tags = parseTagIds(map.tmx_tags, await getTagsTable(TMIO_USER_AGENT));
+  }
+  if (!tags) tags = [];
+  // onTmx: true while there's any doubt. The "Not on TMX" chip only shows on
+  // a confirmed absence — a live lookup that returned null, or a sync that
+  // stamped tmx_styles_updated_at while leaving both style and tags empty.
+  const onTmx = tmx
+    ? true
+    : tmxLookupFailed
+      ? !(map.tmx_styles_updated_at && style == null && tags.length === 0)
+      : false;
 
   res.json({
     mapUid: map.map_uid,
@@ -59,6 +89,9 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     editionName: map.edition_name,
     votes: map.votes,
     voted,
+    style,
+    tags,
+    onTmx,
     tmioUrl: `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`,
     tmxUrl: tmx && tmx.url,
     leaderboard: leaderboard || [],

@@ -13,11 +13,18 @@ async function main() {
   `);
 
   await pool.query(`
-    INSERT INTO maps (map_uid, campaign_id, name, author_account_id, author_name, thumbnail_url) VALUES
-      ('map-uid-1', 1, 'Aqua Ditch',  '11111111-1111-1111-1111-111111111111', 'MapperOne', NULL),
-      ('map-uid-2', 1, 'Black Ditch', '22222222-2222-2222-2222-222222222222', 'MapperTwo', NULL),
-      ('map-uid-3', 2, 'Blue Ditch',  '11111111-1111-1111-1111-111111111111', 'MapperOne', NULL)
-    ON CONFLICT (map_uid) DO NOTHING;
+    INSERT INTO maps (map_uid, campaign_id, name, author_account_id, author_name, thumbnail_url,
+                      tmx_style, tmx_tags, tmx_styles_updated_at) VALUES
+      ('map-uid-1', 1, 'Aqua Ditch',  '11111111-1111-1111-1111-111111111111', 'MapperOne', NULL,
+        'Tech', '3,1', now()),
+      ('map-uid-2', 1, 'Black Ditch', '22222222-2222-2222-2222-222222222222', 'MapperTwo', NULL,
+        NULL, NULL, now()),
+      ('map-uid-3', 2, 'Blue Ditch',  '11111111-1111-1111-1111-111111111111', 'MapperOne', NULL,
+        NULL, NULL, NULL)
+    ON CONFLICT (map_uid) DO UPDATE SET
+      tmx_style = EXCLUDED.tmx_style,
+      tmx_tags = EXCLUDED.tmx_tags,
+      tmx_styles_updated_at = EXCLUDED.tmx_styles_updated_at;
   `);
 
   await pool.query(`

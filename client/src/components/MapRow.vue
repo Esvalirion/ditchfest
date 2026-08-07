@@ -9,6 +9,7 @@ import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
+import StyleTags from './StyleTags.vue';
 
 const props = defineProps({
   map: { type: Object, required: true },
@@ -62,6 +63,7 @@ function onThumbError(e) {
     <div class="map-info">
       <RouterLink class="map-name" :to="{ name: 'map', params: { mapUid: map.mapUid } }">{{ map.name }}</RouterLink>
       <div class="map-author">{{ subtitle }}</div>
+      <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>
     <button
       class="vote-btn vote-btn-sm"

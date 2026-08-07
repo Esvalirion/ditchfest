@@ -11,6 +11,7 @@ import { RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
 import AchievementCard from '../components/AchievementCard.vue';
+import StyleTags from '../components/StyleTags.vue';
 
 const session = useSessionStore();
 
@@ -229,6 +230,7 @@ load();
               @click.stop
             >{{ map.name }}</a>
             <div class="ob-map-author">{{ map.authorName ? 'by ' + map.authorName : '' }}</div>
+            <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
           </div>
           <div class="ob-mark">{{ myVotes.has(map.mapUid) ? '✓' : '+' }}</div>
         </button>

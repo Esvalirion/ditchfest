@@ -31,6 +31,36 @@ async function upsertMap({ mapUid, campaignId, name, authorAccountId, authorName
   );
 }
 
+/** Persist a map's TMX style/tags, separately from the catalog upsert. The
+ *  catalog sync (services/sync.js) calls this after a TMX lookup; passing
+ *  null style+tags is a valid "confirmed not on TMX" result and still stamps
+ *  tmx_styles_updated_at so the same map isn't refetched every run. Pass
+ *  updatedAt=null to leave the timestamp untouched (e.g. on a network error
+ *  where we want to retry next time). */
+async function updateMapTmxStyles({ mapUid, style, tags, updatedAt }) {
+  if (updatedAt === undefined) updatedAt = new Date();
+  await pool.query(
+    `UPDATE maps SET tmx_style = $1, tmx_tags = $2, tmx_styles_updated_at = $3
+     WHERE map_uid = $4`,
+    [style ?? null, tags ?? null, updatedAt, mapUid]
+  );
+}
+
+/** map_uids of the maps least-recently (or never) checked against TMX — used
+ *  to rotate style refreshes across the whole catalog over successive syncs,
+ *  the same way getStalestCampaignIds rotates map refreshes. */
+async function getMapsMissingTmxStyles(limit) {
+  const { rows } = await pool.query(
+    `SELECT map_uid FROM maps
+     WHERE tmx_styles_updated_at IS NULL
+        OR tmx_styles_updated_at < now() - interval '30 days'
+     ORDER BY tmx_styles_updated_at ASC NULLS FIRST
+     LIMIT $1`,
+    [limit]
+  );
+  return rows.map((r) => r.map_uid);
+}
+
 /** Campaign IDs that already have at least one map synced. */
 async function getSyncedCampaignIds() {
   const { rows } = await pool.query('SELECT DISTINCT campaign_id FROM maps');
@@ -68,6 +98,8 @@ async function updateAuthorName(accountId, name) {
 module.exports = {
   upsertEdition,
   upsertMap,
+  updateMapTmxStyles,
+  getMapsMissingTmxStyles,
   getSyncedCampaignIds,
   getStalestCampaignIds,
   getAccountsMissingName,

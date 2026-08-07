@@ -9,6 +9,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
+import StyleTags from '../components/StyleTags.vue';
 
 const route = useRoute();
 const session = useSessionStore();
@@ -92,6 +93,14 @@ watch(() => route.params.mapUid, load, { immediate: true });
           <span class="map-card-dot">·</span>
           <span>{{ map.editionName }}</span>
         </div>
+
+        <StyleTags
+          v-if="map.style || map.tags?.length || map.onTmx === false"
+          class="map-card-tags"
+          :style="map.style"
+          :tags="map.tags"
+          :on-tmx="map.onTmx"
+        />
 
         <div class="map-links">
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
@@ -177,6 +186,11 @@ watch(() => route.params.mapUid, load, { immediate: true });
 
 .map-card-dot {
   margin: 0 6px;
+}
+
+.map-card-tags {
+  margin-top: 12px;
+  justify-content: center;
 }
 
 .map-links {

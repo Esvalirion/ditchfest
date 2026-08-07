@@ -15,7 +15,10 @@ const {
   updateAuthorName,
   upsertEdition,
   upsertMap,
+  updateMapTmxStyles,
+  getMapsMissingTmxStyles,
 } = require('./catalog');
+const { lookupMapByUid } = require('./tmx');
 const { getAppToken, resolveDisplayNames } = require('./names');
 const { refreshEveryone } = require('./grants');
 const { TM_CLUB_ID, TM_FOLDER_ID, TMIO_USER_AGENT } = require('../config');
@@ -28,6 +31,12 @@ const { TM_CLUB_ID, TM_FOLDER_ID, TMIO_USER_AGENT } = require('../config');
 const REFRESH_NEWEST = 3; // always re-fetch this many newest editions
 const MAX_FETCH_PER_RUN = 12; // editions fetched per run
 const REQUEST_DELAY_MS = 600; // ~1.6 req/s, under the ~2 req/s soft limit
+// How many maps' TMX style/tags we refresh per run. TMX is rate-limited too,
+// so this stays small and rotates across the catalog over successive runs
+// (see catalog.js getMapsMissingTmxStyles). Misses (map not on TMX) are still
+// marked checked, so a map only costs one request over its lifetime unless it
+// goes stale.
+const MAX_TMX_STYLES_PER_RUN = 12;
 
 async function syncCatalog() {
   const clubId = Number(TM_CLUB_ID);
@@ -125,6 +134,38 @@ async function syncCatalog() {
     console.error('sync: name resolution failed', String(e));
   }
 
+  // Backfill/refresh TMX style tags for a bounded batch of maps. Best-effort:
+  // a TMX outage can't take the sync down — on a network error we skip the
+  // map (leaving its tmx_styles_updated_at alone so it's retried next run);
+  // a confirmed "not on TMX" miss is stamped so it isn't refetched.
+  let tmxStylesRefreshed = 0;
+  try {
+    const uids = await getMapsMissingTmxStyles(MAX_TMX_STYLES_PER_RUN);
+    for (let i = 0; i < uids.length; i++) {
+      const mapUid = uids[i];
+      if (i > 0) await sleep(REQUEST_DELAY_MS);
+      let info;
+      try {
+        info = await lookupMapByUid(mapUid, ua);
+      } catch (e) {
+        console.error('sync: tmx style fetch failed for', mapUid, String(e));
+        continue; // leave timestamp untouched → retried next run
+      }
+      // info === null means "confirmed not on TMX" — still stamp it so this
+      // map is skipped on future runs until it goes stale.
+      await updateMapTmxStyles({
+        mapUid,
+        style: info && info.style ? info.style : null,
+        // store the raw id string so a future tag-table refresh re-resolves
+        // names without a fresh TMX fetch.
+        tags: info && info.tagsRaw ? info.tagsRaw : null,
+      });
+      tmxStylesRefreshed++;
+    }
+  } catch (e) {
+    console.error('sync: tmx style sweep failed', String(e));
+  }
+
   // Map counts and leaderboard places move with every sync, so re-check the
   // stat achievements for everyone. This is what catches "was in the top 10
   // at some point" for mappers whose page nobody happens to open.
@@ -134,7 +175,6 @@ async function syncCatalog() {
   } catch (e) {
     console.error('sync: achievement sweep failed', String(e));
   }
-
   // How many editions still have no maps at all (initial backfill remaining).
   const syncedAfter = await getSyncedCampaignIds();
   const neverSynced = campaigns.filter((c) => !syncedAfter.has(c.campaignid)).length;
@@ -145,6 +185,7 @@ async function syncCatalog() {
     mapsUpserted,
     neverSynced,
     namesResolved,
+    tmxStylesRefreshed,
     achievementsGranted,
     stoppedEarly,
   };
