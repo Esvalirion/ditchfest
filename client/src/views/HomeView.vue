@@ -65,8 +65,10 @@ const pluralize = {
 // it's in the future. Hardcoded for now — a future task will move the time
 // into an admin-editable setting.
 const FEST_INTERVAL_MS = 14 * 24 * 60 * 60 * 1000;
-// 2025-08-07T20:45:00+03:00 — a known ditchfest Friday.
-const FEST_ANCHOR = new Date('2025-08-07T20:45:00+03:00').getTime();
+// 2026-08-07T20:45:00+03:00 — a known ditchfest Friday (the env clock runs in
+// 2026, where Aug 7 is a Friday; Aug 8 is Saturday). Two-week cadence from
+// here lands on subsequent Fridays.
+const FEST_ANCHOR = new Date('2026-08-07T20:45:00+03:00').getTime();
 
 /** The next upcoming ditchfest start instant. */
 function nextFestStart(now = Date.now()) {
