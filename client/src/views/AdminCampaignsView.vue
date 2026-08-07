@@ -24,6 +24,15 @@ const savingHidden = ref({}); // campaignId -> bool
 const deletingFolder = ref({}); // campaignId -> bool
 const newFolderName = ref('');
 const creatingFolder = ref(false);
+const syncing = ref(false);
+const syncMsg = ref('');
+const syncError = ref(false);
+// trackmania.io rate-limits at ~2 req/s and rejects a second sync inside a
+// minute; the button stays disabled this long after a click so it can't be
+// spammed into a guaranteed sync_failed.
+const SYNC_COOLDOWN_MS = 60_000;
+const syncCooldownEndsAt = ref(0);
+let cooldownTimer = null;
 const draggingMapUid = ref(null);
 const draggingColumnId = ref(null);
 const dragOverCampaignId = ref(null);
@@ -63,6 +72,40 @@ async function load() {
     if (e.status === 403) state.value = 'forbidden';
     else if (e.status === 401) session.sessionExpired();
     else state.value = 'error';
+  }
+}
+
+// Manual pull from trackmania.io — the same run the cron does twice an hour.
+// Used right after a Ditchfest edition to surface a freshly published campaign
+// without waiting up to 30 minutes. Admin overrides are in a separate layer,
+// so this never clobbers themes/renames/hide/order set on this board.
+async function syncCatalog() {
+  syncing.value = true;
+  syncError.value = false;
+  syncMsg.value = 'Syncing…';
+  try {
+    const res = await api('/api/sync/now', { body: {} });
+    syncMsg.value =
+      `Synced: ${res.campaignsFetched} campaigns, ${res.mapsUpserted} maps` +
+      (res.namesResolved ? `, ${res.namesResolved} names` : '') +
+      '.';
+    await load(); // pick up any new campaigns/maps in their synced (not override) state
+  } catch (e) {
+    syncError.value = true;
+    syncMsg.value =
+      e.status === 500
+        ? 'Sync failed — wait a minute before retrying (trackmania.io rate limit).'
+        : 'Sync failed. Try again.';
+  } finally {
+    syncing.value = false;
+    // Begin the cooldown whether the run succeeded or failed: either way a
+    // second immediate call would collide with the same external rate limit.
+    syncCooldownEndsAt.value = Date.now() + SYNC_COOLDOWN_MS;
+    if (cooldownTimer) clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(() => {
+      syncCooldownEndsAt.value = 0;
+      cooldownTimer = null;
+    }, SYNC_COOLDOWN_MS);
   }
 }
 
@@ -310,6 +353,13 @@ load();
     <p v-else-if="state === 'error'" class="subtitle">Failed to load. Try again later.</p>
 
     <template v-else-if="state === 'ready'">
+      <div class="sync-row">
+        <button class="auth-btn" :disabled="syncing || syncCooldownEndsAt > 0" @click="syncCatalog">
+          {{ syncing ? 'Syncing…' : '↻ Sync catalog now' }}
+        </button>
+        <span class="sync-msg" :class="{ 'sync-err': syncError }">{{ syncMsg }}</span>
+      </div>
+
       <div class="new-folder-row">
         <input
           v-model="newFolderName"
@@ -513,6 +563,24 @@ load();
   gap: 6px;
   max-width: 400px;
   margin: 0 0 16px 0;
+}
+
+.sync-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 16px 0;
+}
+
+.sync-msg {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 1em;
+}
+
+.sync-err {
+  color: var(--color-danger);
 }
 
 .campaign-col-header {
