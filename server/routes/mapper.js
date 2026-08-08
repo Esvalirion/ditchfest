@@ -17,13 +17,16 @@ const router = Router();
  *  errors and we retry the legacy primary-authors-only form. */
 async function getMapperMaps(members) {
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
+  // mapSelect is a WHERE-less SELECT; each call site adds its own predicate
+  // (by map_uid set, or by author). It must NOT carry a WHERE against ${ph},
+  // because ${ph} is a list of accountIds, not map_uids — such a clause would
+  // match nothing and silently zero out the map list.
   const mapSelect = `
     SELECT m.map_uid, m.name, m.thumbnail_url, e.name AS edition_name,
            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
               WHERE v.map_uid = m.map_uid) AS votes
      FROM maps m
      LEFT JOIN editions e ON e.campaign_id = m.campaign_id
-     WHERE m.map_uid IN (${ph})
   `;
   let rows;
   try {
@@ -37,7 +40,7 @@ async function getMapperMaps(members) {
            UNION
            SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph})
          )
-         ${mapSelect} AND m.map_uid IN (SELECT map_uid FROM my_maps)
+         ${mapSelect} WHERE m.map_uid IN (SELECT map_uid FROM my_maps)
          ORDER BY votes DESC, m.name ASC`,
         members
       )
@@ -46,7 +49,7 @@ async function getMapperMaps(members) {
     if (isCoauthorsMissing(e)) {
       rows = (
         await pool.query(
-          `${mapSelect} AND m.author_account_id IN (${ph})
+          `${mapSelect} WHERE m.author_account_id IN (${ph})
            ORDER BY votes DESC, m.name ASC`,
           members
         )

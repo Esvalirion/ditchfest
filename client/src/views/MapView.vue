@@ -18,6 +18,23 @@ const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const map = ref(null);
 const votePending = ref(false);
 
+// The map card uses the thumbnail as a drifting parallax background, same idea
+// as the latest-edition panel on the home page. mapCard anchors the cursor math.
+const mapCard = ref(null);
+
+/** Parallax over the map card: the cursor position within the card nudges the
+ *  background a few px. Scoped to this element; no-ops on touch devices (no
+ *  mousemove fires there, the bg just stays static — consistent with home). */
+function handleCardMove(e) {
+  const el = mapCard.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
+  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
+  el.style.setProperty('--hero-x', `${x}px`);
+  el.style.setProperty('--hero-y', `${y}px`);
+}
+
 // Admin co-author editor state. coauthorDraft is a newline-separated list of
 // accountIds; seeded from map.coauthors on every load so the admin always
 // edits the current set. saveCoauthors replaces the whole set server-side.
@@ -131,8 +148,21 @@ watch(() => route.params.mapUid, load, { immediate: true });
     </template>
 
     <template v-else-if="map">
-      <div class="map-card">
-        <img v-if="map.thumbnailUrl" class="map-card-thumb" :src="map.thumbnailUrl" alt="" />
+      <div
+        class="map-card"
+        ref="mapCard"
+        :class="{ 'has-hero': map.thumbnailUrl }"
+        @mousemove="handleCardMove"
+      >
+        <div
+          v-if="map.thumbnailUrl"
+          class="map-card-hero"
+          :style="{ backgroundImage: `url(${map.thumbnailUrl})` }"
+          aria-hidden="true"
+        ></div>
+        <div v-if="map.thumbnailUrl" class="map-card-scrim" aria-hidden="true"></div>
+        <div class="map-card-body">
+        <div class="map-card-headline">
         <h1 class="map-card-name">{{ map.name }}</h1>
         <div class="map-card-meta">
           <RouterLink v-if="map.authorAccountId" :to="{ name: 'mapper', params: { id: map.authorAccountId } }">
@@ -148,7 +178,6 @@ watch(() => route.params.mapUid, load, { immediate: true });
           <span class="map-card-dot">·</span>
           <span>{{ map.editionName }}</span>
         </div>
-
         <StyleTags
           v-if="map.style || map.tags?.length || map.onTmx === false"
           class="map-card-tags"
@@ -156,7 +185,9 @@ watch(() => route.params.mapUid, load, { immediate: true });
           :tags="map.tags"
           :on-tmx="map.onTmx"
         />
+        </div>
 
+        <div class="map-card-foot">
         <div class="map-links">
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
@@ -178,6 +209,8 @@ watch(() => route.params.mapUid, load, { immediate: true });
           <div v-if="coauthorMsg" class="coauthors-admin-msg" :class="{ 'coauthors-admin-err': coauthorErr }">
             {{ coauthorMsg }}
           </div>
+        </div>
+        </div>
         </div>
       </div>
 
@@ -220,6 +253,8 @@ watch(() => route.params.mapUid, load, { immediate: true });
 }
 
 .map-card {
+  position: relative;
+  overflow: hidden;
   padding: 24px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -228,11 +263,77 @@ watch(() => route.params.mapUid, load, { immediate: true });
   text-align: center;
 }
 
-.map-card-thumb {
-  width: 100%;
-  max-width: 480px;
-  border-radius: var(--radius-md);
-  object-fit: cover;
+/* With a hero image, lean on it for the card background (same as the home
+ * page's latest panel) and give it banner height so the thumbnail has room
+ * to breathe instead of hugging the text. Without one, the overlay background
+ * above shows and the card stays content-sized.
+ *
+ * min-height must exceed the body's natural height to actually open up the
+ * banner — otherwise the content already fills the card and the value is a
+ * no-op. 440px comfortably clears the headline + tags + links block. The
+ * admin co-author form adds more, but it sits below and just grows the card
+ * past the min — which is fine, the banner simply gets taller. */
+.map-card.has-hero {
+  min-height: 680px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-elevated);
+}
+
+/* The thumbnail becomes a slowly drifting background. Slightly oversized
+ * (inset: -6%) so the few-px parallax shift never reveals an empty edge.
+ * --hero-x/--hero-y are set by handleCardMove (mousemove). No brightness
+ * filter here: the scrim gradient below does the darkening toward the
+ * bottom, where the text lives. */
+.map-card-hero {
+  position: absolute;
+  inset: -6%;
+  background-size: cover;
+  background-position: center;
+  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
+  transition: transform 0.2s ease-out;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Gradient scrim: darkened at BOTH ends (top and bottom) where the text
+ * lives, lighter in the middle so the thumbnail still reads. The bottom stays
+ * fully opaque so the name/meta/links/admin form sit on a solid field;
+ * the top is strongly tinted too so the card's top edge reads as a card.
+ * On top of this, the body itself carries a translucent plaque (see
+ * .map-card-body-plaque) as a second guarantee against bright photo patches. */
+.map-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(17, 17, 17, 0.7) 0%,
+    rgba(17, 17, 17, 0.35) 35%,
+    rgba(17, 17, 17, 0.55) 70%,
+    var(--color-bg-elevated) 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+}
+
+.map-card-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* With a hero image the card is a flex column (see .has-hero): make the body a
+ * flex column too so the headline (name/authors/tags) sticks to the top and
+ * the foot (links + admin form) sticks to the bottom. Without a hero this is a
+ * no-op, the body flows normally. */
+.map-card.has-hero .map-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+/* Foot (links + admin co-author form) pushed to the bottom of the banner. */
+.map-card.has-hero .map-card-foot {
+  margin-top: auto;
 }
 
 .map-card-name {
@@ -244,16 +345,34 @@ watch(() => route.params.mapUid, load, { immediate: true });
 
 .map-card-meta {
   margin-top: 8px;
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
 .map-card-meta a {
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
 }
 
 .map-card-meta a:hover {
   color: var(--color-text-bright);
+}
+
+/* Translucent plaque behind the name + meta + tags: a second guarantee that
+ * the text stays legible on bright patches of the hero photo (the gradient
+ * scrim is the first). align-self: center keeps the plaque centered within the
+ * flex column instead of stretching full-width. Only with a hero. */
+.map-card.has-hero .map-card-headline {
+  align-self: center;
+  max-width: 90%;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  background: rgba(17, 17, 17, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.map-card.has-hero .map-card-name {
+  margin-top: 0;
 }
 
 .map-card-dot {
@@ -278,6 +397,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   padding: 8px 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: var(--color-bg);
   color: var(--color-text-bright);
   font-size: 0.9rem;
   text-decoration: none;
