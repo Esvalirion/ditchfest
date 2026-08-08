@@ -215,7 +215,7 @@ watch(() => route.params.id, load, { immediate: true });
    * an empty edge. --hero-x/--hero-y are set by handleCardMove (mousemove). */
   transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
   transition: transform 0.2s ease-out;
-  filter: brightness(0.28) saturate(0.85);
+  filter: brightness(0.18) saturate(0.85);
   z-index: 0;
   pointer-events: none;
 }
