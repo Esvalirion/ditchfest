@@ -39,6 +39,7 @@ psql -d postgres -f server/db/002_schema.sql
 psql -d postgres -f server/db/003_campaign_overrides.sql
 psql -d postgres -f server/db/004_campaign_folders.sql
 psql -d postgres -f server/db/005_campaign_sort_order.sql
+psql -d postgres -f server/db/008_map_coauthors.sql
 
 # Бэкенд
 cd server

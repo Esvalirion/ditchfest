@@ -4,6 +4,8 @@ const { optionalAuth } = require('../middleware/auth');
 const { canon, groupMembers } = require('../services/links');
 const { fetchMapLeaderboard } = require('../services/tmio');
 const { lookupMapByUid, parseTagIds, getTagsTable } = require('../services/tmx');
+const { getCoauthors } = require('../services/coauthors');
+const { lookupMany } = require('../services/names');
 const { TMIO_USER_AGENT } = require('../config');
 
 const router = Router();
@@ -82,6 +84,18 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
       ? !(map.tmx_styles_updated_at && style == null && tags.length === 0)
       : false;
 
+  // Co-authors (collaborations): admin-managed extras beyond the single
+  // Nadeo-credited author. getCoauthors degrades to [] when migration 008
+  // hasn't been applied yet, so the page still renders — just without the
+  // extra names. Names are resolved live via the TM OAuth API (same as the
+  // primary author), best-effort: a TM hiccup leaves names null, not a crash.
+  const coauthorIds = await getCoauthors(mapUid);
+  let coauthors = [];
+  if (coauthorIds.length) {
+    const names = await lookupMany(coauthorIds);
+    coauthors = coauthorIds.map((id) => ({ accountId: id, name: names.get(id) || null }));
+  }
+
   res.json({
     mapUid: map.map_uid,
     name: map.name,
@@ -98,6 +112,7 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     tmioUrl: `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`,
     tmxUrl: tmx && tmx.url,
     leaderboard: leaderboard || [],
+    coauthors,
   });
 });
 

@@ -39,6 +39,15 @@ function onVoted(mapUid, voted) {
   myVotes.value = new Set(myVotes.value); // Set mutation isn't reactive on its own
 }
 
+// "by Author" plus a "+ N more" hint when the map has admin-added co-authors.
+// Names aren't resolved in the catalog (that'd be a TM API call per view);
+// the single-map page shows them in full.
+function mapSubtitle(map) {
+  if (!map.authorName) return '';
+  const n = map.coauthors?.length || 0;
+  return n ? `by ${map.authorName} & ${n} more` : `by ${map.authorName}`;
+}
+
 load();
 </script>
 
@@ -72,7 +81,7 @@ load();
             v-for="map in edition.maps"
             :key="map.mapUid"
             :map="map"
-            :subtitle="map.authorName ? 'by ' + map.authorName : ''"
+            :subtitle="mapSubtitle(map)"
             :voted="myVotes.has(map.mapUid)"
             @voted="(voted) => onVoted(map.mapUid, voted)"
           />

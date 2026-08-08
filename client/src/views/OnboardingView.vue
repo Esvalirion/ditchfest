@@ -170,6 +170,14 @@ function goBack() {
   }
 }
 
+// "by Author" + "+ N more" when the map has co-authors. Mirrors MapsView — the
+// catalog only carries co-author accountIds, names are on the single-map page.
+function obMapAuthor(map) {
+  if (!map.authorName) return '';
+  const n = map.coauthors?.length || 0;
+  return n ? `by ${map.authorName} & ${n} more` : `by ${map.authorName}`;
+}
+
 load();
 </script>
 
@@ -229,7 +237,7 @@ load();
               rel="noopener"
               @click.stop
             >{{ map.name }}</a>
-            <div class="ob-map-author">{{ map.authorName ? 'by ' + map.authorName : '' }}</div>
+            <div class="ob-map-author">{{ obMapAuthor(map) }}</div>
             <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
           </div>
           <div class="ob-mark">{{ myVotes.has(map.mapUid) ? '✓' : '+' }}</div>

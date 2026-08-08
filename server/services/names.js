@@ -52,4 +52,19 @@ async function lookupOne(accountId) {
   }
 }
 
-module.exports = { getAppToken, resolveDisplayNames, lookupOne };
+/** Resolve several accountIds at once into a Map<accountId, name>. Missing/
+ *  unreachable ids just have no entry (or map to null) — never throws, so a TM
+ *  API hiccup can't take down a page that wants to label a few co-authors. */
+async function lookupMany(accountIds) {
+  if (!accountIds.length) return new Map();
+  try {
+    const token = await getAppToken();
+    const names = await resolveDisplayNames(accountIds, token);
+    return new Map(accountIds.map((id) => [id, names[id] || null]));
+  } catch (e) {
+    console.error('names lookup failed', String(e));
+    return new Map();
+  }
+}
+
+module.exports = { getAppToken, resolveDisplayNames, lookupOne, lookupMany };

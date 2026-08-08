@@ -18,6 +18,14 @@ const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const map = ref(null);
 const votePending = ref(false);
 
+// Admin co-author editor state. coauthorDraft is a newline-separated list of
+// accountIds; seeded from map.coauthors on every load so the admin always
+// edits the current set. saveCoauthors replaces the whole set server-side.
+const coauthorDraft = ref('');
+const savingCoauthors = ref(false);
+const coauthorMsg = ref('');
+const coauthorErr = ref(false);
+
 function formatTime(ms) {
   if (ms == null) return '—';
   const total = Math.round(ms);
@@ -41,8 +49,49 @@ async function load(mapUid) {
     map.value = data;
     state.value = 'ready';
     document.title = 'Ditchfest ' + (data.name || 'Map');
+    // Seed the co-author editor from the current set (empty when none / when
+    // the server hasn't applied migration 008 yet).
+    coauthorDraft.value = (data.coauthors || []).map((c) => c.accountId).join('\n');
+    coauthorMsg.value = '';
+    coauthorErr.value = false;
   } catch (e) {
     state.value = e.status === 404 ? 'not-found' : 'error';
+  }
+}
+
+async function saveCoauthors() {
+  if (!map.value) return;
+  // Split on any whitespace, dedup, drop empties — the server does the same,
+  // but doing it here keeps the UI honest about what it's about to send.
+  const accountIds = [
+    ...new Set(
+      coauthorDraft.value
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    ),
+  ];
+  savingCoauthors.value = true;
+  coauthorErr.value = false;
+  coauthorMsg.value = 'Saving…';
+  try {
+    await api('/api/map/' + encodeURIComponent(map.value.mapUid) + '/coauthors', {
+      body: { accountIds },
+    });
+    coauthorMsg.value = 'Saved.';
+    await load(map.value.mapUid);
+  } catch (e) {
+    coauthorErr.value = true;
+    if (e.status === 503) {
+      coauthorMsg.value = "This feature isn't enabled on the server yet.";
+    } else if (e.status === 401) {
+      session.sessionExpired();
+      coauthorMsg.value = 'Session expired.';
+    } else {
+      coauthorMsg.value = 'Failed to save co-authors.';
+    }
+  } finally {
+    savingCoauthors.value = false;
   }
 }
 
@@ -90,6 +139,12 @@ watch(() => route.params.mapUid, load, { immediate: true });
             {{ map.authorName || 'Unknown mapper' }}
           </RouterLink>
           <span v-else>{{ map.authorName || 'Unknown mapper' }}</span>
+          <template v-for="(co, i) in map.coauthors" :key="co.accountId">
+            <span class="map-card-coauthors-sep">{{ i === 0 ? ' & ' : ', ' }}</span>
+            <RouterLink :to="{ name: 'mapper', params: { id: co.accountId } }">
+              {{ co.name || co.accountId }}
+            </RouterLink>
+          </template>
           <span class="map-card-dot">·</span>
           <span>{{ map.editionName }}</span>
         </div>
@@ -106,6 +161,23 @@ watch(() => route.params.mapUid, load, { immediate: true });
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
           <span v-else class="map-link-btn map-link-btn-disabled">Not on TMX</span>
+        </div>
+
+        <div v-if="session.isAdmin" class="coauthors-admin">
+          <label class="coauthors-admin-label">Co-authors (accountIds, one per line)</label>
+          <textarea
+            v-model="coauthorDraft"
+            class="coauthors-admin-input"
+            rows="3"
+            placeholder="one accountId per line&#10;(leave empty to clear)"
+            :disabled="savingCoauthors"
+          />
+          <button class="coauthors-admin-btn" :disabled="savingCoauthors" @click="saveCoauthors">
+            {{ savingCoauthors ? 'Saving…' : 'Save co-authors' }}
+          </button>
+          <div v-if="coauthorMsg" class="coauthors-admin-msg" :class="{ 'coauthors-admin-err': coauthorErr }">
+            {{ coauthorMsg }}
+          </div>
         </div>
       </div>
 
@@ -319,5 +391,78 @@ watch(() => route.params.mapUid, load, { immediate: true });
 
 .map-back:hover {
   color: var(--color-text-bright);
+}
+
+.map-card-coauthors-sep {
+  margin-left: 4px;
+  color: var(--color-text-faintest);
+}
+
+/* Admin co-author editor — inline block inside the map card, shown only for
+   admins. Styled to match the rest of the card, not the separate admin pages. */
+.coauthors-admin {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-hairline);
+  text-align: left;
+}
+
+.coauthors-admin-label {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.coauthors-admin-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.coauthors-admin-input:focus {
+  outline: none;
+  border-color: var(--color-text-bright);
+}
+
+.coauthors-admin-btn {
+  margin-top: 10px;
+  padding: 6px 14px;
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border 0.15s, background 0.15s;
+}
+
+.coauthors-admin-btn:hover:not(:disabled) {
+  border-color: var(--color-text-bright);
+}
+
+.coauthors-admin-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.coauthors-admin-msg {
+  margin-top: 8px;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+}
+
+.coauthors-admin-err {
+  color: var(--color-accent);
 }
 </style>

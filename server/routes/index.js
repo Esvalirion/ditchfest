@@ -14,5 +14,6 @@ router.use('/api', require('./admins'));
 router.use('/api', require('./links'));
 router.use('/api', require('./sync'));
 router.use('/api', require('./campaigns'));
+router.use('/api', require('./coauthors'));
 
 module.exports = router;

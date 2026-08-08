@@ -4,6 +4,7 @@
 const { pool } = require('../db');
 const { canon } = require('./links');
 const { getTagsTable, parseTagIds } = require('./tmx');
+const { getCoauthorsForMaps } = require('./coauthors');
 const { TMIO_USER_AGENT } = require('../config');
 
 /** Editions (newest/high-weight first) with their maps and per-map vote counts.
@@ -45,12 +46,18 @@ async function getEditions() {
       throw e;
     }
   }
+  // Co-authors are attached in a second pass: one batched query for the whole
+  // catalog (getCoauthorsForMaps) instead of N per-map lookups. Empty for every
+  // map when migration 008 isn't applied yet — getCoauthorsForMaps degrades to
+  // an empty Map on the undefined_table error.
+  const allMapUids = rows.flatMap((e) => e.maps.map((m) => m.mapUid)).filter(Boolean);
+  const coauthorsByMap = await getCoauthorsForMaps(allMapUids);
   return rows.map((e) => ({
     campaignId: e.campaign_id,
     name: e.name,
     media: e.media,
     theme: e.theme,
-    maps: e.maps.map((m) => buildMapStyles(m, tagTable)),
+    maps: e.maps.map((m) => buildMapStyles(m, tagTable, coauthorsByMap.get(m.mapUid) || [])),
   }));
 }
 
@@ -115,8 +122,12 @@ function editionsQuery(withStyles) {
  *  - onTmx: false only when we have *confirmed* (tmxCheckedAt set) the map is
  *           NOT on TMX; true otherwise (on TMX, or not yet checked). The
  *           client shows a "Not on TMX" chip exactly in the confirmed-absent
- *           case, never for still-pending maps. */
-function buildMapStyles(m, tagTable) {
+ *           case, never for still-pending maps.
+ *  - coauthors: accountId[] of admin-added co-authors (migration 008). The
+ *           catalog only needs the ids — names are resolved live on the
+ *           single-map page (routes/map.js). Identities are NOT resolved here;
+ *           aggregates that count authors wrap these in canon() themselves. */
+function buildMapStyles(m, tagTable, coauthorIds = []) {
   const style = m.style || null;
   const tags = parseTagIds(m.tagsRaw, tagTable);
   const checked = !!m.tmxCheckedAt;
@@ -131,6 +142,7 @@ function buildMapStyles(m, tagTable) {
     style,
     tags,
     onTmx,
+    coauthors: coauthorIds,
   };
 }
 
