@@ -19,6 +19,27 @@ const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const mapper = ref(null);
 const myVotes = ref(new Set());
 
+// The header card uses the mapper's best (top-voted) map thumbnail as a
+// parallax background — same idea as the latest-edition card on HomeView.
+// mapper.maps arrives already sorted (votes DESC), so [0] is the best one.
+const mapperCard = ref(null);
+
+/** Best map's thumbnail URL when there is one — drives the card's moving
+ *  background. Null (no background image) when the mapper has no maps. */
+const heroImage = computed(() => mapper.value?.maps?.[0]?.thumbnailUrl || null);
+
+/** Parallax over the header card: the cursor position within the card nudges
+ *  the background a few px. Bound/unbound with the card's lifecycle. */
+function handleCardMove(e) {
+  const el = mapperCard.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
+  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
+  el.style.setProperty('--hero-x', `${x}px`);
+  el.style.setProperty('--hero-y', `${y}px`);
+}
+
 // Linked accounts' nicknames, comma-joined — null when there are none, so the
 // template can skip the whole "(...)" span. alts comes from the API already
 // empty for an unlinked account.
@@ -96,7 +117,19 @@ watch(() => route.params.id, load, { immediate: true });
     </template>
 
     <template v-else-if="mapper">
-      <div class="mapper-card">
+      <div
+        ref="mapperCard"
+        class="mapper-card"
+        :class="{ 'has-hero': heroImage }"
+        @mousemove="handleCardMove"
+      >
+        <div
+          v-if="heroImage"
+          class="mapper-hero"
+          :style="{ backgroundImage: `url(${heroImage})` }"
+          aria-hidden="true"
+        ></div>
+        <div class="mapper-card-content">
         <h1 class="mapper-name">
           {{ mapper.name || 'Unknown player' }}
           <span v-if="altNames" class="mapper-alts">({{ altNames }})</span>
@@ -126,6 +159,7 @@ watch(() => route.params.id, load, { immediate: true });
             <RouterLink class="auth-btn" :to="{ name: 'onboarding' }">Start here</RouterLink>
             <button class="auth-btn" @click="doLogout">Logout</button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -159,12 +193,42 @@ watch(() => route.params.id, load, { immediate: true });
 }
 
 .mapper-card {
+  position: relative;
+  overflow: hidden;
   padding: 24px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background-color: var(--color-overlay-2);
   box-shadow: var(--shadow-card);
   text-align: center;
+}
+
+/* The best map's thumbnail becomes a slowly drifting background, same as the
+ * latest-edition card on HomeView. Darkened + desaturated so the foreground
+ * text and stats stay legible regardless of the source image. */
+.mapper-hero {
+  position: absolute;
+  inset: -6%;
+  background-size: cover;
+  background-position: center;
+  /* Slightly oversized (inset: -6%) so the few-px parallax shift never reveals
+   * an empty edge. --hero-x/--hero-y are set by handleCardMove (mousemove). */
+  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
+  transition: transform 0.2s ease-out;
+  filter: brightness(0.28) saturate(0.85);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* With a hero image, lean on it for the card background; without one, the
+ * default overlay background shows through as before. */
+.mapper-card.has-hero {
+  background-color: var(--color-bg-elevated);
+}
+
+.mapper-card-content {
+  position: relative;
+  z-index: 1;
 }
 
 .mapper-name {
