@@ -204,8 +204,11 @@ async function bestMapThumb(members) {
 }
 
 /** Build the <head> injection: a block of OG + Twitter meta tags, plus a
- *  <title> override (crawlers read <title> too). Returns the rewritten HTML,
- *  or the input unchanged if no <title> and no </head> are found. */
+ *  <title> override (crawlers read <title> too). Any pre-existing og:/twitter:
+ *  meta tags baked into index.html are stripped first — otherwise crawlers see
+ *  two complete sets and Discord renders the second one as an extra thumbnail
+ *  alongside the real card image. Returns the rewritten HTML, or the input
+ *  unchanged if no <title> and no </head> are found. */
 function injectOg(html, { title, description, image, url, origin }) {
   const cardImage = image || `${origin}/res/og-default.png`;
   const ogTitle = escapeHtml(title);
@@ -224,14 +227,22 @@ function injectOg(html, { title, description, image, url, origin }) {
     `<meta name="twitter:image" content="${escapeHtml(cardImage)}" />`,
   ].join('\n  ');
 
+  // Drop any existing og:/twitter: meta tags from index.html so the injected
+  // set is the only one crawlers see — index.html carries a default set as the
+  // dev/Vite fallback, and leaving it in produces duplicates in production.
+  const cleaned = html.replace(
+    /[ \t]*<meta\s+(?:property|name)=["](?:og:|twitter:)[^>]*>\s*/gi,
+    ''
+  );
+
   const titleTag = `<title>${ogTitle}</title>`;
   // Replace the existing <title>...</title> (index.html always has one) and
   // drop the OG block right after it. If there's no <title>, insert before
   // </head> instead.
-  if (/<title>[^<]*<\/title>/i.test(html)) {
-    return html.replace(/<title>[^<]*<\/title>/i, `${titleTag}\n  ${tags}`);
+  if (/<title>[^<]*<\/title>/i.test(cleaned)) {
+    return cleaned.replace(/<title>[^<]*<\/title>/i, `${titleTag}\n  ${tags}`);
   }
-  return html.replace(/<\/head>/i, `  ${tags}\n  ${titleTag}\n</head>`);
+  return cleaned.replace(/<\/head>/i, `  ${tags}\n  ${titleTag}\n</head>`);
 }
 
 function escapeHtml(s) {
