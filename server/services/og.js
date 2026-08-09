@@ -13,6 +13,7 @@
 const { pool } = require('../db');
 const { canon } = require('./links');
 const { isCoauthorsMissing } = require('./coauthors');
+const { getEditions } = require('./editions');
 
 const SITE_NAME = 'Ditchfest Signs';
 const SITE_DESCRIPTION = 'Community signs, ratings and leaderboards for Ditchfest maps.';
@@ -253,10 +254,38 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+/** The /maps catalog page's OG card: an invitation to vote, paired with the
+ *  newest edition's banner (or, when the edition has no banner — common for
+ *  fresh editions — the first map's thumbnail). Uses getEditions() rather than
+ *  re-implementing the edition ordering (sort_order + display_campaign_id +
+ *  hidden + folders), so this card can never disagree with the page itself
+ *  about which edition is "newest". The whole editions query is cached here so
+ *  a crawler re-fetch is cheap. Returns null on any failure (default card). */
+async function getMapsPageForOg() {
+  return cached('maps', async () => {
+    const editions = await getEditions();
+    if (!editions.length) return null;
+    const newest = editions[0];
+    const editionName = newest.name ? `${newest.name}` : '';
+    const image =
+      newest.media ||
+      newest.maps?.[0]?.thumbnailUrl ||
+      null;
+    const title = editionName
+      ? `Vote on the latest Ditchfest — ${editionName}`
+      : 'Vote on the latest Ditchfest maps';
+    const description =
+      'Pick the best Ditchfest maps. Sign in with Trackmania, hit "+" on the ' +
+      'ones you love, and shape the community ranking.';
+    return { title, description, image };
+  });
+}
+
 module.exports = {
   SITE_NAME,
   SITE_DESCRIPTION,
   getMapForOg,
   getMapperForOg,
+  getMapsPageForOg,
   injectOg,
 };

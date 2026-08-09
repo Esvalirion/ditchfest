@@ -7,6 +7,7 @@ const {
   SITE_DESCRIPTION,
   getMapForOg,
   getMapperForOg,
+  getMapsPageForOg,
   injectOg,
 } = require('./services/og');
 
@@ -47,11 +48,11 @@ if (SERVES_CLIENT) {
 
   // Rich previews (Discord/Telegram/Slack/Twitter). Crawlers don't run JS, so
   // a Vue SPA's <head> is empty for them — here we inject OG/Twitter meta tags
-  // into index.html before serving. For /map/:mapUid and /mapper/:id the card
-  // varies per link (resolved from the DB, best-effort); every other route gets
-  // the default site card. The origin is derived per request so og:image/og:url
-  // are always absolute, which the OG spec requires and crawlers expect —
-  // important because the app is mirrored across multiple domains.
+  // into index.html before serving. For /map/:mapUid, /mapper/:id and /maps the
+  // card varies (resolved from the DB, best-effort); every other route gets the
+  // default site card. The origin is derived per request so og:image/og:url are
+  // always absolute, which the OG spec requires and crawlers expect — important
+  // because the app is mirrored across multiple domains.
   app.get('*path', async (req, res) => {
     const origin = `${req.protocol}://${req.get('host')}`;
     const url = origin + req.originalUrl.split('?')[0];
@@ -70,9 +71,14 @@ if (SERVES_CLIENT) {
         data = og
           ? { ...og, url, origin }
           : { title: SITE_NAME, description: SITE_DESCRIPTION, image: null, url, origin };
+      } else if (req.path === '/maps') {
+        const og = await getMapsPageForOg();
+        data = og
+          ? { ...og, url, origin }
+          : { title: SITE_NAME, description: SITE_DESCRIPTION, image: null, url, origin };
       } else {
-        // Every other route (home, /maps, /top-mappers, admin, …): default
-        // card. Routed through injectOg too so og:image/og:url are absolute
+        // Every other route (home, /top-mappers, admin, …): default card.
+        // Routed through injectOg too so og:image/og:url are absolute
         // (consistent with the per-link paths and the OG spec).
         data = { title: SITE_NAME, description: SITE_DESCRIPTION, image: null, url, origin };
       }
