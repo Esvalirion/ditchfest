@@ -156,10 +156,6 @@ watch([showDots, showBase], scheduleRender);
 
     <div class="studio-controls">
       <div class="studio-header">
-        <p class="studio-hint">
-          {{ selectedGradient.description }} Pick colours for each stop. Result
-          is 2048×512 — download it as a JPEG when you're happy.
-        </p>
         <label v-if="GRADIENTS.length > 1" class="kind-select">
           <span>Style</span>
           <select v-model="selectedKind" @change="onKindChange">
