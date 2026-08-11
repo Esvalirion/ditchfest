@@ -21,14 +21,14 @@ export const GRADIENTS = [
     description: '`>`-shaped mask, two halves each with a left→right gradient.',
     groups: [
       {
-        legend: 'Right side',
+        legend: 'Left side',
         stops: [
           { key: 'right1', label: 'Left', default: '#6c6c6c' },
           { key: 'right2', label: 'Right', default: '#2e2e2e' },
         ],
       },
       {
-        legend: 'Left side',
+        legend: 'Right side',
         stops: [
           { key: 'left1', label: 'Left', default: '#1a1a1a' },
           { key: 'left2', label: 'Right', default: '#030303' },
