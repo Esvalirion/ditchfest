@@ -1,13 +1,18 @@
 <!-- Sign Studio: build a custom Ditchfest sign background in the browser.
-     A stencil mask (bckgrnask.png, `>`-shaped) splits the canvas into a light
-     zone and a shadow zone; each zone gets its own top→bottom two-stop
-     gradient. A static dots tile is composited on top. Output is a 2048×512
-     JPEG, rendered entirely client-side — no server round-trip.
+     The current gradient kind ("arrow") uses a stencil mask to split the
+     canvas into two halves shaped like a `>`, each filled with its own
+     left→right two-stop gradient. A dots tile and a base overlay (frames/
+     logos) are composited on top. Output is a 2048×512 JPEG, rendered entirely
+     client-side — no server round-trip.
+
+     Gradient kinds are defined in ../data/signStudioGradients.js; the dropdown
+     and colour pickers below are generated from that registry, so adding a new
+     kind is a new entry there (plus a renderer branch) — no UI edits needed.
 
      The same full-resolution canvas is used for the preview (scaled down via
      CSS) and for the export, so what you see is what you get. -->
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import {
   renderGradient,
   downloadJpeg,
@@ -15,20 +20,36 @@ import {
   setDotsTile,
   setBase,
   getAssetUrls,
-  DEFAULT_COLOR_A1,
-  DEFAULT_COLOR_A2,
-  DEFAULT_COLOR_B1,
-  DEFAULT_COLOR_B2,
   STUDIO_WIDTH,
   STUDIO_HEIGHT,
 } from '../utils/gradientRenderer.js';
+import {
+  GRADIENTS,
+  DEFAULT_GRADIENT_KIND,
+  defaultColorsFor,
+} from '../data/signStudioGradients.js';
 
-// Four colours — two per stencil zone, each zone is a top→bottom gradient.
-// A = the bright "light side" of the `>`, B = the dark "shadow side".
-const colorA1 = ref(DEFAULT_COLOR_A1);
-const colorA2 = ref(DEFAULT_COLOR_A2);
-const colorB1 = ref(DEFAULT_COLOR_B1);
-const colorB2 = ref(DEFAULT_COLOR_B2);
+// Which gradient kind is active. Drives both the renderer dispatch and which
+// colour pickers show up (computed from the registry).
+const selectedKind = ref(DEFAULT_GRADIENT_KIND);
+const selectedGradient = computed(
+  () => GRADIENTS.find((g) => g.kind === selectedKind.value) || GRADIENTS[0],
+);
+
+// Colour state keyed by stop key (matches the registry). Reactive object so
+// v-model on <input type="color"> stays simple. When the kind changes, the
+// stop keys change too — reset to that kind's defaults so we never feed the
+// renderer a stop it doesn't know about.
+const colors = reactive(defaultColorsFor(DEFAULT_GRADIENT_KIND));
+
+function onKindChange() {
+  // Reset colours to the new kind's defaults. Keeps the canvas sensible rather
+  // than carrying over colours that may no longer map to anything.
+  const next = defaultColorsFor(selectedKind.value);
+  for (const k of Object.keys(colors)) delete colors[k];
+  Object.assign(colors, next);
+  scheduleRender();
+}
 
 const maskLoaded = ref(false);
 const dotsLoaded = ref(false);
@@ -53,10 +74,8 @@ function scheduleRender() {
 function paint() {
   if (!canvasEl.value) return;
   renderGradient(canvasEl.value, {
-    colorA1: colorA1.value,
-    colorA2: colorA2.value,
-    colorB1: colorB1.value,
-    colorB2: colorB2.value,
+    kind: selectedKind.value,
+    colors: { ...colors },
     showDots: showDots.value,
     showBase: showBase.value,
   });
@@ -112,7 +131,10 @@ onBeforeUnmount(() => {
   if (renderTimer) clearTimeout(renderTimer);
 });
 
-watch([colorA1, colorA2, colorB1, colorB2, showDots, showBase], scheduleRender);
+// Any colour or toggle change repaints. Watch colors deeply (object values
+// mutate via v-model); the scalar refs get plain watches.
+watch(colors, scheduleRender, { deep: true });
+watch([showDots, showBase], scheduleRender);
 </script>
 
 <template>
@@ -133,45 +155,31 @@ watch([colorA1, colorA2, colorB1, colorB2, showDots, showBase], scheduleRender);
     </p>
 
     <div class="studio-controls">
-      <p class="studio-hint">
-        Pick a colour pair for each side of the stencil. Light side and shadow
-        side each get a left→right gradient. Result is 2048×512 — download it as
-        a JPEG when you're happy.
-      </p>
+      <div class="studio-header">
+        <p class="studio-hint">
+          {{ selectedGradient.description }} Pick colours for each stop. Result
+          is 2048×512 — download it as a JPEG when you're happy.
+        </p>
+        <label v-if="GRADIENTS.length > 1" class="kind-select">
+          <span>Style</span>
+          <select v-model="selectedKind" @change="onKindChange">
+            <option v-for="g in GRADIENTS" :key="g.kind" :value="g.kind">{{ g.label }}</option>
+          </select>
+        </label>
+      </div>
 
       <div class="zones">
-        <fieldset class="zone zone-light">
-          <legend>Light side</legend>
-          <label class="stop">
-            <span class="stop-label">Left</span>
+        <fieldset v-for="(grp, gi) in selectedGradient.groups" :key="gi" class="zone">
+          <legend>{{ grp.legend }}</legend>
+          <label v-for="st in grp.stops" :key="st.key" class="stop">
+            <span class="stop-label">{{ st.label }}</span>
             <span class="stop-input">
-              <input type="color" v-model="colorA1" aria-label="Light side left colour" />
-              <span class="stop-hex">{{ colorA1 }}</span>
-            </span>
-          </label>
-          <label class="stop">
-            <span class="stop-label">Right</span>
-            <span class="stop-input">
-              <input type="color" v-model="colorA2" aria-label="Light side right colour" />
-              <span class="stop-hex">{{ colorA2 }}</span>
-            </span>
-          </label>
-        </fieldset>
-
-        <fieldset class="zone zone-shadow">
-          <legend>Shadow side</legend>
-          <label class="stop">
-            <span class="stop-label">Left</span>
-            <span class="stop-input">
-              <input type="color" v-model="colorB1" aria-label="Shadow side left colour" />
-              <span class="stop-hex">{{ colorB1 }}</span>
-            </span>
-          </label>
-          <label class="stop">
-            <span class="stop-label">Right</span>
-            <span class="stop-input">
-              <input type="color" v-model="colorB2" aria-label="Shadow side right colour" />
-              <span class="stop-hex">{{ colorB2 }}</span>
+              <input
+                type="color"
+                v-model="colors[st.key]"
+                :aria-label="`${grp.legend} ${st.label} colour`"
+              />
+              <span class="stop-hex">{{ colors[st.key] }}</span>
             </span>
           </label>
         </fieldset>
@@ -248,10 +256,41 @@ watch([colorA1, colorA2, colorB1, colorB2, showDots, showBase], scheduleRender);
   margin-top: 22px;
 }
 
+.studio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
 .studio-hint {
   color: var(--color-text-muted);
   font-size: 0.85rem;
-  margin: 0 0 16px;
+  margin: 0;
+  flex: 1 1 320px;
+}
+
+.kind-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+.kind-select select {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.kind-select select:focus {
+  outline: none;
+  border-color: var(--color-text-bright);
 }
 
 .zones {

@@ -3,25 +3,21 @@
 // (the studio preview, the download export, and any future preset thumbnail all
 // call the same path).
 //
-// The Ditchfest sign background is a stencil composite: a binary mask PNG
+// The current gradient kind ("arrow") is a stencil composite: a binary mask PNG
 // (bckgrnask.png, 2048×512, white vs near-black) splits the canvas into two
-// zones shaped like a `>`. Zone A (mask ≈ white) gets painted with gradient A,
-// zone B (mask ≈ black) with gradient B — both simple vertical 2-stop linear
-// gradients. A static dots tile is composited on top when available.
+// zones shaped like a `>`. Zone A (mask ≈ white) gets painted with one
+// left→right 2-stop gradient, zone B (mask ≈ black) with another. A dots tile
+// and a base overlay (frames/logos) are composited on top.
 //
-// Two gradients × two colours each = four user-facing colour pickers. The
-// stencil mask is what carries the signature `>` shape; there is no angle or
-// hardness to tune — the shape is baked in, only colours vary.
+// Dispatch is on options.kind → a per-kind render function. Adding a new kind
+// is a new render function plus an entry in GRADIENTS
+// (../data/signStudioGradients.js). The UI dropdown picks up kinds from there
+// automatically.
+
+import { DEFAULT_GRADIENT_KIND, defaultColorsFor } from '../data/signStudioGradients.js';
 
 export const STUDIO_WIDTH = 2048;
 export const STUDIO_HEIGHT = 512;
-
-// Default colours — sampled off the production background. Gradient A is the
-// brighter "light side" of the stencil, gradient B is the darker "shadow side".
-export const DEFAULT_COLOR_A1 = '#6c6c6c'; // top of light zone
-export const DEFAULT_COLOR_A2 = '#2e2e2e'; // bottom of light zone
-export const DEFAULT_COLOR_B1 = '#1a1a1a'; // top of shadow zone
-export const DEFAULT_COLOR_B2 = '#030303'; // bottom of shadow zone
 
 let maskImage = null; // HTMLImageElement / HTMLCanvasElement with the stencil, or null.
 let dotsTile = null;
@@ -79,11 +75,15 @@ function hexToRgb(hex) {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
-// Render the masked two-gradient composite into `canvas`.
-// options.colorA1/A2 — top/bottom of the "light" zone gradient
-// options.colorB1/B2 — top/bottom of the "shadow" zone gradient
-// If the stencil mask isn't loaded yet, falls back to a plain gradient A fill
-// so the studio is never blank — the `>` appears as soon as the mask loads.
+// Render the gradient background into `canvas`.
+//
+// options.kind   — which gradient to render (default: first in the registry)
+// options.colors — map of { stopKey: '#rrggbb' }; keys come from the gradient's
+//                  stop definitions in signStudioGradients.js
+// options.showDots / showBase — toggle the overlay layers (default: true)
+//
+// Dispatches on kind. Unknown kinds fall back to the default. After the
+// gradient body, dither + dots + base are applied uniformly.
 export function renderGradient(canvas, options = {}) {
   if (!canvas) return;
   const W = STUDIO_WIDTH;
@@ -91,26 +91,64 @@ export function renderGradient(canvas, options = {}) {
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
 
-  const a1 = hexToRgb(options.colorA1 ?? DEFAULT_COLOR_A1);
-  const a2 = hexToRgb(options.colorA2 ?? DEFAULT_COLOR_A2);
-  const b1 = hexToRgb(options.colorB1 ?? DEFAULT_COLOR_B1);
-  const b2 = hexToRgb(options.colorB2 ?? DEFAULT_COLOR_B2);
-
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const wantDots = options.showDots !== false;
   const wantBase = options.showBase !== false;
 
+  const kind = options.kind || DEFAULT_GRADIENT_KIND;
+  // Merge defaults with user-supplied colours so a missing key still renders.
+  const colors = { ...defaultColorsFor(kind), ...(options.colors || {}) };
+
+  // Dispatch on kind. Each renderer fills the canvas with the gradient body
+  // only; overlays are composited uniformly below.
+  switch (kind) {
+    case 'linear':
+      renderLinearGradient(ctx, W, H, colors);
+      break;
+    case 'arrow':
+    default:
+      renderArrowGradient(ctx, W, H, colors);
+      break;
+  }
+
+  applyDither(ctx, W, H);
+  if (wantDots) compositeDots(ctx, W, H);
+  if (wantBase) compositeBase(ctx, W, H);
+}
+
+// The "linear" kind: a plain left→right gradient across the whole canvas with
+// three evenly-spaced stops (left / center / right). No mask, no zones — the
+// simplest possible background, useful as a baseline or when the `>` shape
+// isn't wanted.
+function renderLinearGradient(ctx, W, H, colors) {
+  const g = ctx.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, colors.c1);
+  g.addColorStop(0.5, colors.c2);
+  g.addColorStop(1, colors.c3);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// The "arrow" kind: stencil mask splits the canvas into two halves shaped like
+// `>`. The right half (mask ≈ white) gets a left→right gradient from
+// colors.right1 → colors.right2; the left half (mask ≈ black) from
+// colors.left1 → colors.left2. Each zone's gradient is mapped onto its own
+// half of the canvas so the user sees the full ramp within each visible zone.
+//
+// If the mask isn't loaded yet, falls back to a plain right1→right2 horizontal
+// fill so the studio is never blank — the `>` appears as soon as the mask loads.
+function renderArrowGradient(ctx, W, H, colors) {
+  const r1 = hexToRgb(colors.right1);
+  const r2 = hexToRgb(colors.right2);
+  const l1 = hexToRgb(colors.left1);
+  const l2 = hexToRgb(colors.left2);
+
   if (!maskImage) {
-    // No mask yet: paint gradient A as a plain horizontal fill so the studio
-    // isn't empty while the asset loads.
     const g = ctx.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0, options.colorA1 ?? DEFAULT_COLOR_A1);
-    g.addColorStop(1, options.colorA2 ?? DEFAULT_COLOR_A2);
+    g.addColorStop(0, colors.right1);
+    g.addColorStop(1, colors.right2);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    applyDither(ctx, W, H);
-    if (wantDots) compositeDots(ctx, W, H);
-    if (wantBase) compositeBase(ctx, W, H);
     return;
   }
 
@@ -124,50 +162,45 @@ export function renderGradient(canvas, options = {}) {
   const maskData = maskCtx.getImageData(0, 0, W, H).data;
 
   // Build the composited image one pixel at a time. Each zone's gradient is
-  // mapped onto its own half of the canvas (A: left half 0..W/2, B: right half
-  // W/2..W) so the user sees the full colour ramp within each visible zone
-  // rather than only half of one canvas-wide ramp.
+  // mapped onto its own half of the canvas so the user sees the full colour
+  // ramp within each visible zone rather than only half of one canvas-wide ramp.
   const out = ctx.createImageData(W, H);
   const dst = out.data;
   const half = W / 2;
   // Precompute each zone's colour per column once.
-  const aRamp = new Float32Array(W);
-  const aGamp = new Float32Array(W);
-  const aBamp = new Float32Array(W);
-  const bRamp = new Float32Array(W);
-  const bGamp = new Float32Array(W);
-  const bBamp = new Float32Array(W);
+  const rightR = new Float32Array(W);
+  const rightG = new Float32Array(W);
+  const rightB = new Float32Array(W);
+  const leftR = new Float32Array(W);
+  const leftG = new Float32Array(W);
+  const leftB = new Float32Array(W);
   for (let x = 0; x < W; x++) {
-    // Zone A ramp lives on the left half; clamp on the right half (rare pixels
-    // there get the A2 endpoint, which the mask hides anyway).
-    const tA = Math.max(0, Math.min(1, x / half));
-    aRamp[x] = a1[0] + (a2[0] - a1[0]) * tA;
-    aGamp[x] = a1[1] + (a2[1] - a1[1]) * tA;
-    aBamp[x] = a1[2] + (a2[2] - a1[2]) * tA;
-    // Zone B ramp lives on the right half, measured from W/2.
-    const tB = Math.max(0, Math.min(1, (x - half) / half));
-    bRamp[x] = b1[0] + (b2[0] - b1[0]) * tB;
-    bGamp[x] = b1[1] + (b2[1] - b1[1]) * tB;
-    bBamp[x] = b1[2] + (b2[2] - b1[2]) * tB;
+    // Right zone ramp lives on the left half; clamp on the right half (rare
+    // pixels there get the right2 endpoint, which the mask hides anyway).
+    const tR = Math.max(0, Math.min(1, x / half));
+    rightR[x] = r1[0] + (r2[0] - r1[0]) * tR;
+    rightG[x] = r1[1] + (r2[1] - r1[1]) * tR;
+    rightB[x] = r1[2] + (r2[2] - r1[2]) * tR;
+    // Left zone ramp lives on the right half, measured from W/2.
+    const tL = Math.max(0, Math.min(1, (x - half) / half));
+    leftR[x] = l1[0] + (l2[0] - l1[0]) * tL;
+    leftG[x] = l1[1] + (l2[1] - l1[1]) * tL;
+    leftB[x] = l1[2] + (l2[2] - l1[2]) * tL;
   }
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const mi = (y * W + x) * 4;
-      // Mask: white (>127) → zone A (light), else zone B (shadow). Smoothstep
-      // the boundary over a few brightness levels to avoid a razor edge.
+      // Mask: white (>127) → right zone, else left zone. Smoothstep the
+      // boundary over a few brightness levels to avoid a razor edge.
       const m = maskData[mi]; // red channel, 0..255
       const k = m < 110 ? 0 : m > 150 ? 1 : (m - 110) / 40;
-      dst[mi] = aRamp[x] * k + bRamp[x] * (1 - k);
-      dst[mi + 1] = aGamp[x] * k + bGamp[x] * (1 - k);
-      dst[mi + 2] = aBamp[x] * k + bBamp[x] * (1 - k);
+      dst[mi] = rightR[x] * k + leftR[x] * (1 - k);
+      dst[mi + 1] = rightG[x] * k + leftG[x] * (1 - k);
+      dst[mi + 2] = rightB[x] * k + leftB[x] * (1 - k);
       dst[mi + 3] = 255;
     }
   }
   ctx.putImageData(out, 0, 0);
-
-  applyDither(ctx, W, H);
-  if (wantDots) compositeDots(ctx, W, H);
-  if (wantBase) compositeBase(ctx, W, H);
 }
 
 function compositeDots(ctx, W, H) {
