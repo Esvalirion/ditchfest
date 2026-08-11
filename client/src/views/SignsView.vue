@@ -4,11 +4,16 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { SIGNS } from '../data/signs.js';
+import SignStudio from '../components/SignStudio.vue';
 
 const TOP_FILTERS = [
   { key: '1x4', label: '1x4' },
   { key: '1x6', label: '1x6' },
   { key: 'all', label: 'All' },
+  // Studio is a builder, not a catalogue filter: when active it renders the
+  // SignStudio component instead of the gallery, and the bottom filter row is
+  // hidden (it has no meaningful category).
+  { key: 'studio', label: 'Studio' },
 ];
 
 const BOTTOM_FILTERS = {
@@ -29,7 +34,13 @@ let notifTimer = null;
 
 function setTopFilter(key) {
   topFilter.value = key;
-  bottomFilter.value = key === 'all' ? null : BOTTOM_FILTERS[key][0].type;
+  // 'all' has no bottom filter; 'studio' shows the builder instead of a
+  // category list. Everything else picks the first bottom category.
+  if (key === 'all' || key === 'studio') {
+    bottomFilter.value = null;
+  } else {
+    bottomFilter.value = BOTTOM_FILTERS[key][0].type;
+  }
 }
 
 function setBottomFilter(type) {
@@ -57,7 +68,7 @@ async function copySrc(src) {
 </script>
 
 <template>
-  <div class="accordion">
+  <div v-if="topFilter !== 'studio'" class="accordion">
     <p class="accordion-toggle" @click="accordionOpen = !accordionOpen">Click here for more information</p>
     <div class="accordion-content" :class="{ open: accordionOpen }">
       <p class="subtitle">Click on any image to copy its URL to clipboard</p>
@@ -76,19 +87,24 @@ async function copySrc(src) {
     >{{ f.label }}</button>
   </div>
 
-  <template v-for="(group, key) in BOTTOM_FILTERS" :key="key">
-    <div v-if="topFilter === key" class="filter-buttons bottom-level">
-      <button
-        v-for="f in group"
-        :key="f.type"
-        class="filter-btn"
-        :class="{ active: bottomFilter === f.type }"
-        @click="setBottomFilter(f.type)"
-      >{{ f.label }}</button>
-    </div>
-  </template>
+  <!-- Studio mode replaces the catalogue: no accordion hint, no bottom
+       filters, no gallery — just the builder. -->
+  <SignStudio v-if="topFilter === 'studio'" />
 
-  <div class="gallery">
+  <template v-else>
+    <template v-for="(group, key) in BOTTOM_FILTERS" :key="key">
+      <div v-if="topFilter === key" class="filter-buttons bottom-level">
+        <button
+          v-for="f in group"
+          :key="f.type"
+          class="filter-btn"
+          :class="{ active: bottomFilter === f.type }"
+          @click="setBottomFilter(f.type)"
+        >{{ f.label }}</button>
+      </div>
+    </template>
+
+    <div class="gallery">
     <div
       v-for="sign in visibleSigns"
       :key="sign.src"
@@ -98,6 +114,7 @@ async function copySrc(src) {
       <img :src="sign.src" :alt="sign.alt" />
     </div>
   </div>
+  </template>
 
   <div class="notification" :style="{ opacity: notificationVisible ? 1 : 0 }">
     URL copied to clipboard!
