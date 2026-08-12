@@ -17,7 +17,7 @@
 export const GRADIENTS = [
   {
     kind: 'arrow',
-    label: 'Arrow stencil',
+    label: 'Classic',
     description: '`>`-shaped mask, two halves each with a left→right gradient.',
     groups: [
       {
