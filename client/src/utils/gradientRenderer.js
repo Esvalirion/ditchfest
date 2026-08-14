@@ -3,21 +3,37 @@
 // (the studio preview, the download export, and any future preset thumbnail all
 // call the same path).
 //
-// The current gradient kind ("arrow") is a stencil composite: a binary mask PNG
-// (bckgrnask.png, 2048×512, white vs near-black) splits the canvas into two
-// zones shaped like a `>`. Zone A (mask ≈ white) gets painted with one
-// left→right 2-stop gradient, zone B (mask ≈ black) with another. A dots tile
-// and a base overlay (frames/logos) are composited on top.
+// The renderer is format-parametric: options.format supplies { width, height }
+// (one of the Nadeo advertisement ratios — 1x1, 2x1, 4x1, 6x1; see
+// ../data/signStudioFormats.js). The canvas is sized to that and all layers
+// (gradient body, dither, dots, base) composite at that resolution.
+//
+// The "arrow" gradient kind is a stencil composite: a binary mask PNG
+// (bckgrnask.png, authored at native 2048×512, white vs near-black) splits the
+// canvas into two zones shaped like `>`. Zone A (mask ≈ white) gets one
+// left→right 2-stop gradient, zone B (mask ≈ black) another. The mask and the
+// base overlay are placed at their NATIVE size, centred on the canvas — never
+// stretched — so the `>` shape and the centred logo keep their geometry on any
+// format. On wider canvases (6×1) the mask is continued into the side margins
+// by edge-clamping (the `>` reads as fully-left-zone at its left edge,
+// fully-right-zone at its right edge), so the gradient flows smoothly into the
+// margins; on narrower ones (1×1/2×1) its central slice is cropped into view.
 //
 // Dispatch is on options.kind → a per-kind render function. Adding a new kind
 // is a new render function plus an entry in GRADIENTS
 // (../data/signStudioGradients.js). The UI dropdown picks up kinds from there
 // automatically.
 
-import { DEFAULT_GRADIENT_KIND, defaultColorsFor } from '../data/signStudioGradients.js';
-
-export const STUDIO_WIDTH = 2048;
-export const STUDIO_HEIGHT = 512;
+import {
+  DEFAULT_GRADIENT_KIND,
+  defaultColorsFor,
+} from '../data/signStudioGradients.js';
+import {
+  DEFAULT_FORMAT_KIND,
+  findFormat,
+  NATIVE_MASK_WIDTH,
+  NATIVE_MASK_HEIGHT,
+} from '../data/signStudioFormats.js';
 
 let maskImage = null; // HTMLImageElement / HTMLCanvasElement with the stencil, or null.
 let dotsTile = null;
@@ -30,6 +46,8 @@ let baseImage = null; // overlay (logos/frames) drawn last, on top of everything
 
 export function setMask(img) {
   maskImage = img || null;
+  // Invalidate the cached mask bitmap so the next render rebuilds it.
+  cachedMaskData = null;
 }
 export function setDotsTile(tile) {
   dotsTile = tile || null;
@@ -37,6 +55,11 @@ export function setDotsTile(tile) {
 export function setBase(img) {
   baseImage = img || null;
 }
+
+// Note: the user-chosen overlay is passed directly through renderGradient's
+// options.userOverlay on every paint() — there's no module-scope setter for it
+// (an earlier setUserOverlay/getUserOverlay pair existed but was never read by
+// the renderer, so it was dead code and is now removed).
 export function getMask() {
   return maskImage;
 }
@@ -56,6 +79,10 @@ function clamp8(v) {
 
 // Tiny 8-bit dither to keep dark gradients from banding — Photoshop's
 // "Dither: on" does the same. ~1.5% amplitude.
+//
+// (No try/catch needed: gallery overlays are loaded via a CORS proxy
+// — see loadOverlayImage in SignStudio.vue — so the canvas never gets
+// tainted and getImageData is always safe.)
 function applyDither(ctx, width, height) {
   const { data } = ctx.getImageData(0, 0, width, height);
   for (let i = 0; i < data.length; i += 4) {
@@ -75,8 +102,26 @@ function hexToRgb(hex) {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
+// Cached pixel data of the mask, rasterised once at its native size. Reused
+// across renders (and across formats) until the mask image is swapped via
+// setMask(). Sampling in normalised coordinates means every format reads the
+// same bitmap — only the per-pixel index math differs.
+let cachedMaskData = null;
+function getMaskData() {
+  if (cachedMaskData || !maskImage) return cachedMaskData;
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = NATIVE_MASK_WIDTH;
+  maskCanvas.height = NATIVE_MASK_HEIGHT;
+  const maskCtx = maskCanvas.getContext('2d');
+  maskCtx.drawImage(maskImage, 0, 0, NATIVE_MASK_WIDTH, NATIVE_MASK_HEIGHT);
+  cachedMaskData = maskCtx.getImageData(0, 0, NATIVE_MASK_WIDTH, NATIVE_MASK_HEIGHT).data;
+  return cachedMaskData;
+}
+
 // Render the gradient background into `canvas`.
 //
+// options.format — { width, height } of the output (default: 4x1 / 2048×512).
+//                  A format kind string ("4x1") is also accepted for brevity.
 // options.kind   — which gradient to render (default: first in the registry)
 // options.colors — map of { stopKey: '#rrggbb' }; keys come from the gradient's
 //                  stop definitions in signStudioGradients.js
@@ -86,34 +131,59 @@ function hexToRgb(hex) {
 // gradient body, dither + dots + base are applied uniformly.
 export function renderGradient(canvas, options = {}) {
   if (!canvas) return;
-  const W = STUDIO_WIDTH;
-  const H = STUDIO_HEIGHT;
+
+  // Resolve the canvas size from the format. A kind string or a {width,height}
+  // object are both accepted; unknown values fall back to the default format.
+  const fmt =
+    typeof options.format === 'string'
+      ? findFormat(options.format)
+      : options.format && options.format.width && options.format.height
+        ? options.format
+        : findFormat(DEFAULT_FORMAT_KIND);
+  const W = fmt.width;
+  const H = fmt.height;
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  // Always start from a blank (fully transparent) canvas. The gradient body
+  // used to cover every pixel opaquely, hiding stale content, but with
+  // showGradient:false the previous frame would otherwise linger forever.
+  ctx.clearRect(0, 0, W, H);
+  const wantGradient = options.showGradient !== false;
   const wantDots = options.showDots !== false;
   const wantBase = options.showBase !== false;
+  // User overlay (gallery artwork) draws on top of base; null/missing skips it.
+  const userOverlay = options.userOverlay || null;
+  const userOverlayScale = Number.isFinite(options.userOverlayScale)
+    ? options.userOverlayScale
+    : 1;
 
   const kind = options.kind || DEFAULT_GRADIENT_KIND;
   // Merge defaults with user-supplied colours so a missing key still renders.
   const colors = { ...defaultColorsFor(kind), ...(options.colors || {}) };
 
   // Dispatch on kind. Each renderer fills the canvas with the gradient body
-  // only; overlays are composited uniformly below.
-  switch (kind) {
-    case 'linear':
-      renderLinearGradient(ctx, W, H, colors);
-      break;
-    case 'arrow':
-    default:
-      renderArrowGradient(ctx, W, H, colors);
-      break;
+  // only; overlays are composited uniformly below. With showGradient:false the
+  // canvas is left transparent (no body, no dither — dither only exists to
+  // de-band the gradient), so the export must be PNG to keep the alpha.
+  if (wantGradient) {
+    switch (kind) {
+      case 'linear':
+        renderLinearGradient(ctx, W, H, colors);
+        break;
+      case 'arrow':
+      default:
+        renderArrowGradient(ctx, W, H, colors);
+        break;
+    }
+    applyDither(ctx, W, H);
   }
-
-  applyDither(ctx, W, H);
   if (wantDots) compositeDots(ctx, W, H);
   if (wantBase) compositeBase(ctx, W, H);
+  if (userOverlay) {
+    compositeUserOverlay(ctx, W, H, userOverlay, userOverlayScale);
+  }
 }
 
 // The "linear" kind: a plain left→right gradient across the whole canvas with
@@ -135,6 +205,17 @@ function renderLinearGradient(ctx, W, H, colors) {
 // colors.left1 → colors.left2. Each zone's gradient is mapped onto its own
 // half of the canvas so the user sees the full ramp within each visible zone.
 //
+// The mask is authored at native 2048×512 (a 4:1 ratio) and is placed at its
+// NATIVE size, centred on the canvas — never stretched. Canvas height is always
+// 512px (= native mask height), so the mask always spans the full height; only
+// its horizontal placement shifts. On a wider canvas (6×1 = 3072×512) the mask
+// sits centred and the `>` is continued into the side margins by edge-clamping
+// the mask sample to its nearest edge column — the left edge of the `>` is
+// fully the left zone, the right edge fully the right zone, so the margins
+// read as a smooth continuation of the arrow's two zones (with the per-column
+// gradient ramp carrying through). On a narrower canvas (1×1/2×1) the central
+// slice of the mask is cropped into view.
+//
 // If the mask isn't loaded yet, falls back to a plain right1→right2 horizontal
 // fill so the studio is never blank — the `>` appears as soon as the mask loads.
 function renderArrowGradient(ctx, W, H, colors) {
@@ -152,14 +233,15 @@ function renderArrowGradient(ctx, W, H, colors) {
     return;
   }
 
-  // Draw the mask into an offscreen canvas to read its pixels. The mask is
-  // expected to be 2048×512 RGBA; we use the red channel as the zone selector.
-  const maskCanvas = document.createElement('canvas');
-  maskCanvas.width = W;
-  maskCanvas.height = H;
-  const maskCtx = maskCanvas.getContext('2d');
-  maskCtx.drawImage(maskImage, 0, 0, W, H);
-  const maskData = maskCtx.getImageData(0, 0, W, H).data;
+  const maskData = getMaskData();
+  const nW = NATIVE_MASK_WIDTH;
+  const nH = NATIVE_MASK_HEIGHT;
+  // Mask placed at native size, horizontally centred on the canvas. dx is 0 at
+  // 4×1, positive on wider canvases (margins on the sides), negative on narrower
+  // ones (the mask is wider than the canvas, so its central slice is cropped).
+  const dx = Math.round((W - nW) / 2);
+  const maskLeft = dx; // canvas-x where the mask's column 0 lands
+  const maskRight = dx + nW; // canvas-x just past the mask's last column
 
   // Build the composited image one pixel at a time. Each zone's gradient is
   // mapped onto its own half of the canvas so the user sees the full colour
@@ -187,17 +269,33 @@ function renderArrowGradient(ctx, W, H, colors) {
     leftG[x] = l1[1] + (l2[1] - l1[1]) * tL;
     leftB[x] = l1[2] + (l2[2] - l1[2]) * tL;
   }
+  // Canvas height equals native mask height, so each canvas row maps 1:1 to a
+  // mask row; clamp defensively anyway.
+  const nativeY = new Int32Array(H);
   for (let y = 0; y < H; y++) {
+    nativeY[y] = Math.min(nH - 1, Math.max(0, Math.floor((y / H) * nH)));
+  }
+  for (let y = 0; y < H; y++) {
+    const nY = nativeY[y];
     for (let x = 0; x < W; x++) {
-      const mi = (y * W + x) * 4;
+      const di = (y * W + x) * 4;
+      // Outside the mask's native footprint: continue the `>` into the margins
+      // by clamping the mask sample to its nearest edge column (edge-clamp
+      // extrapolation). At the mask's left edge the `>` is fully black
+      // (left zone), at the right edge fully white (right zone) — so the side
+      // margins read as a smooth continuation of the arrow's two zones, with
+      // the per-column gradient ramp already computed in leftR/rightR. No flat
+      // fill, no seam.
+      const nX = x < maskLeft ? 0 : x >= maskRight ? nW - 1 : x - dx;
+      const mi = (nY * nW + nX) * 4;
       // Mask: white (>127) → right zone, else left zone. Smoothstep the
       // boundary over a few brightness levels to avoid a razor edge.
       const m = maskData[mi]; // red channel, 0..255
       const k = m < 110 ? 0 : m > 150 ? 1 : (m - 110) / 40;
-      dst[mi] = rightR[x] * k + leftR[x] * (1 - k);
-      dst[mi + 1] = rightG[x] * k + leftG[x] * (1 - k);
-      dst[mi + 2] = rightB[x] * k + leftB[x] * (1 - k);
-      dst[mi + 3] = 255;
+      dst[di] = rightR[x] * k + leftR[x] * (1 - k);
+      dst[di + 1] = rightG[x] * k + leftG[x] * (1 - k);
+      dst[di + 2] = rightB[x] * k + leftB[x] * (1 - k);
+      dst[di + 3] = 255;
     }
   }
   ctx.putImageData(out, 0, 0);
@@ -213,14 +311,49 @@ function compositeDots(ctx, W, H) {
 }
 
 // The base overlay (logos, frames) is the last layer — drawn on top of the
-// gradient + dots so the branding reads cleanly over any colour choice.
+// gradient + dots so the branding reads cleanly over any colour choice. Like
+// the arrow mask, the asset is authored at native 2048×512 and placed at its
+// NATIVE size, centred on the canvas — never stretched, so the centred logo
+// keeps its geometry. On wider canvases (6×1) the base sits centred with empty
+// margins; on narrower ones (1×1/2×1) its central slice is cropped into view.
+// This matches the mask placement so the `>` and the logo stay registered.
 function compositeBase(ctx, W, H) {
   if (!baseImage) return;
-  ctx.drawImage(baseImage, 0, 0, W, H);
+  const nW = NATIVE_MASK_WIDTH;
+  const nH = NATIVE_MASK_HEIGHT;
+  const dx = Math.round((W - nW) / 2);
+  // Source crop keeps us inside [0, nW]; dest crop keeps us inside [0, W]. On
+  // the native 4×1 canvas both crops are the full image (dx = 0).
+  const sx = dx < 0 ? -dx : 0;
+  const sw = Math.min(nW - sx, W);
+  ctx.drawImage(baseImage, sx, 0, sw, nH, dx + sx, 0, sw, nH);
 }
 
-// Trigger a JPEG download of the current canvas.
-export function downloadJpeg(canvas, filename = 'ditchfest-sign.jpg', quality = 0.92) {
+// The user-chosen overlay (arrows, memes, mapper avatars) — the topmost layer,
+// drawn after base so it sits above the branding. Contain-fit: scaled so the
+// WHOLE image is visible inside the canvas (scale = min(W/nW, H/nH)), keeping
+// its native aspect — never stretched or squashed — and centred. For the
+// 2048×512 gallery art this means the exact same absolute size on every format
+// (all canvases are 512px tall): 1×1/2×1 clip the sides, 4×1 is an exact fit,
+// 6×1 centres it with gradient margins. On wide canvases use the zoom slider
+// to enlarge (100% = contain; >100% grows past it, cropping edges).
+function compositeUserOverlay(ctx, W, H, img, zoom = 1) {
+  const nW = img.naturalWidth;
+  const nH = img.naturalHeight;
+  if (!nW || !nH) return;
+  const fit = Math.min(W / nW, H / nH);
+  const scale = fit * zoom;
+  const drawW = nW * scale;
+  const drawH = nH * scale;
+  const dx = Math.round((W - drawW) / 2);
+  const dy = Math.round((H - drawH) / 2);
+  ctx.drawImage(img, dx, dy, drawW, drawH);
+}
+
+
+// Shared blob download: encode the canvas with the given type and trigger a
+// file download.
+function downloadBlob(canvas, filename, type, quality) {
   return new Promise((resolve, reject) => {
     if (!canvas) {
       reject(new Error('canvas missing'));
@@ -242,8 +375,19 @@ export function downloadJpeg(canvas, filename = 'ditchfest-sign.jpg', quality = 
         setTimeout(() => URL.revokeObjectURL(url), 0);
         resolve(blob);
       },
-      'image/jpeg',
+      type,
       quality,
     );
   });
+}
+
+// Trigger a JPEG download of the current canvas (opaque renders).
+export function downloadJpeg(canvas, filename = 'ditchfest-sign.jpg', quality = 0.92) {
+  return downloadBlob(canvas, filename, 'image/jpeg', quality);
+}
+
+// Trigger a PNG download — use when the gradient layer is off and the canvas
+// has transparency (JPEG has no alpha channel and would bake it to black).
+export function downloadPng(canvas, filename = 'ditchfest-sign.png') {
+  return downloadBlob(canvas, filename, 'image/png');
 }

@@ -6,6 +6,14 @@ import { createRouter, createWebHistory } from 'vue-router';
 const routes = [
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
   { path: '/signs', name: 'signs', component: () => import('../views/SignsView.vue') },
+  {
+    path: '/studio',
+    name: 'studio',
+    component: () => import('../views/StudioView.vue'),
+    // The studio is a builder for signs, not its own top-level nav entry —
+    // highlight the Signs tab while on /studio (same pattern as /map → maps).
+    meta: { navGroup: 'signs' },
+  },
   { path: '/maps', name: 'maps', component: () => import('../views/MapsView.vue') },
   { path: '/top-players', name: 'top-players', component: () => import('../views/TopPlayersView.vue') },
   { path: '/top-mappers', name: 'top-mappers', component: () => import('../views/TopMappersView.vue') },

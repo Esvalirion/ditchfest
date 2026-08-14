@@ -82,3 +82,15 @@ export const SIGNS = [
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_Xainess.png', alt: 'Overlay Mapper Xainess' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_zelibumba.png', alt: 'Overlay Mapper zelibumba' },
 ];
+
+// Overlay picker for the Sign Studio: the three gallery categories that are
+// composable on top of a gradient background (arrows, memes, mapper avatars).
+// Backgrounds/ditchfest are excluded — those are full-canvas sign templates,
+// not overlayable artwork. Each entry mirrors a SIGNS row so the picker and the
+// gallery never drift apart.
+export const OVERLAY_CATEGORIES = [
+  { key: 'overlays', label: 'Overlays', signs: SIGNS.filter((s) => s.type === 'overlays') },
+  { key: 'memes', label: 'Memes', signs: SIGNS.filter((s) => s.type === 'memes') },
+  { key: 'mappers', label: 'Mappers', signs: SIGNS.filter((s) => s.type === 'mappers') },
+];
+
