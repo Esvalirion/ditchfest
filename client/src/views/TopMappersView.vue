@@ -6,9 +6,14 @@ import { api } from '../utils/api';
 
 // Sort categories — default stays 'votes' (Rating). Adding an entry here plus
 // the matching field in the SQL is all it takes to grow a new category.
+// 'castVotes' ranks by votes cast (participation), not votes received — its
+// rows come straight from the votes table via FULL OUTER JOIN, so people who
+// never shipped a map appear too (with votes/maps = 0); the mapper-only tabs
+// below filter those back out to keep the old behaviour.
 const SORT_OPTIONS = [
-  { key: 'votes', label: 'Most Liked', metric: 'votes' },
-  { key: 'maps', label: 'Map Count', metric: 'maps' },
+  { key: 'votes', label: 'Likes Received', metric: 'votes' },
+  { key: 'maps', label: 'Maps Made', metric: 'maps' },
+  { key: 'cast', label: 'Likes Given', metric: 'castVotes' },
 ];
 
 const router = useRouter();
@@ -23,9 +28,15 @@ const activeOption = computed(
 
 // Backend returns the list ordered by votes; the client re-sorts locally when
 // the user picks another category. Rank is always the post-sort array index.
+// Mapper-only tabs ('votes'/'maps') hide rows without maps — the backend also
+// ships pure voters for the 'castVotes' tab, and they'd clutter those two.
 const displayedMappers = computed(() => {
-  const metric = activeOption.value.metric;
-  return [...mappers.value].sort((a, b) => {
+  const opt = activeOption.value;
+  const metric = opt.metric;
+  const pool = metric === 'castVotes'
+    ? mappers.value
+    : mappers.value.filter((m) => m.maps > 0);
+  return [...pool].sort((a, b) => {
     if (b[metric] !== a[metric]) return b[metric] - a[metric];
     return (a.name || '').localeCompare(b.name || '');
   });
