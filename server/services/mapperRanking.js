@@ -88,9 +88,13 @@ function rankingQuery(withCoauthors) {
       GROUP BY 1
     ),
     voters AS (
-      SELECT ${canon('account_id')} AS account_id,
+      -- canon() inlines a correlated subquery over account_links, so the
+      -- column MUST be qualified (vo.account_id): a bare account_id would
+      -- bind to account_links' own column inside the subquery and resolve
+      -- every voter to one arbitrary identity.
+      SELECT ${canon('vo.account_id')} AS account_id,
              COUNT(*)::int AS cast_votes
-      FROM votes
+      FROM votes vo
       GROUP BY 1
     )
     SELECT account_id,

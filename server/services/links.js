@@ -17,6 +17,12 @@ const { pool } = require('../db');
  * `col` must be SQL you wrote yourself (a column reference), never user input.
  */
 function canon(col) {
+  // The fragment inlines a correlated subquery over account_links, so an
+  // unqualified column would bind to account_links' own column inside it and
+  // silently resolve every row to one identity. Require table-qualified input.
+  if (!col.includes('.')) {
+    throw new Error(`canon(): column must be table-qualified, got "${col}" (e.g. "v.account_id")`);
+  }
   return `COALESCE((SELECT l.primary_id FROM account_links l WHERE l.account_id = ${col}), ${col})`;
 }
 

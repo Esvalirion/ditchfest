@@ -87,9 +87,9 @@ async function refreshAccount(canonicalId, members, rank) {
 async function getMapCounts() {
   const { rows } = await queryWithCoauthorFallback(
     `SELECT id, COUNT(*)::int AS n FROM (
-       SELECT ${canon('author_account_id')} AS id FROM maps WHERE author_account_id IS NOT NULL
+       SELECT ${canon('mp.author_account_id')} AS id FROM maps mp WHERE mp.author_account_id IS NOT NULL
        UNION ALL
-       SELECT ${canon('account_id')} AS id FROM map_coauthors
+       SELECT ${canon('mc.account_id')} AS id FROM map_coauthors mc
      ) t GROUP BY 1`,
     `SELECT ${canon('m.author_account_id')} AS id, COUNT(*)::int AS n FROM maps m
      WHERE m.author_account_id IS NOT NULL GROUP BY 1`
