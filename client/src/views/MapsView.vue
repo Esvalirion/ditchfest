@@ -3,18 +3,42 @@
      vote for as many maps as they like and toggle any vote at any time.
 
      This is the "I know what I'm doing" view. Newcomers get OnboardingView,
-     which walks the same catalog one edition at a time. -->
+     which walks the same catalog one edition at a time.
+
+     Two tabs: the classic per-edition browser (default) and "Top Maps" —
+     the whole catalog flattened and sorted by likes. Two thousand rows at
+     once would be a slug, so the top list renders in chunks of TOP_PAGE. -->
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
 import MapRow from '../components/MapRow.vue';
+
+const TABS = [
+  { key: 'editions', label: 'Editions' },
+  { key: 'top', label: 'Top Maps' },
+];
+
+const TOP_PAGE = 100;
 
 const session = useSessionStore();
 
 const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
 const editions = ref([]);
 const myVotes = ref(new Set());
+const tab = ref('editions');
+const topCount = ref(TOP_PAGE);
+
+// The catalog payload already carries each map's vote count, so the top list
+// is just a client-side flatten-and-sort; rank is the post-sort array index.
+const topMaps = computed(() =>
+  editions.value.flatMap((e) => e.maps).sort((a, b) => {
+    if (b.votes !== a.votes) return b.votes - a.votes;
+    return (a.name || '').localeCompare(b.name || '');
+  }),
+);
+
+const displayedTopMaps = computed(() => topMaps.value.slice(0, topCount.value));
 
 async function load() {
   state.value = 'loading';
@@ -62,31 +86,65 @@ load();
         Log in to vote — you can vote for as many maps as you like.
       </p>
 
-      <section
-        v-for="edition in editions"
-        :key="edition.name"
-        class="vote-group"
-        :class="{ open: edition._open }"
-      >
-        <button class="vote-group-header" @click="edition._open = !edition._open">
-          <span class="vg-title">
-            {{ edition.name }}
-            <span v-if="edition.theme" class="vg-theme">— {{ edition.theme }}</span>
-          </span>
-          <span class="vg-count">{{ edition.maps.length }} maps</span>
-        </button>
+      <div class="filter-buttons">
+        <button
+          v-for="t in TABS"
+          :key="t.key"
+          class="filter-btn"
+          :class="{ active: tab === t.key }"
+          @click="tab = t.key"
+        >{{ t.label }}</button>
+      </div>
 
-        <div class="vote-group-body">
-          <MapRow
-            v-for="map in edition.maps"
-            :key="map.mapUid"
-            :map="map"
-            :subtitle="mapSubtitle(map)"
-            :voted="myVotes.has(map.mapUid)"
-            @voted="(voted) => onVoted(map.mapUid, voted)"
-          />
-        </div>
-      </section>
+      <template v-if="tab === 'top'">
+        <section class="vote-group open top-maps">
+          <div class="vote-group-body">
+            <div v-for="(map, i) in displayedTopMaps" :key="map.mapUid" class="top-map-row">
+              <span class="top-rank">{{ i + 1 }}</span>
+              <MapRow
+                class="top-map-entry"
+                :map="map"
+                :subtitle="mapSubtitle(map)"
+                :voted="myVotes.has(map.mapUid)"
+                @voted="(voted) => onVoted(map.mapUid, voted)"
+              />
+            </div>
+          </div>
+        </section>
+        <button
+          v-if="topCount < topMaps.length"
+          class="filter-btn show-more"
+          @click="topCount += TOP_PAGE"
+        >Show more ({{ topMaps.length - topCount }} left)</button>
+      </template>
+
+      <template v-else>
+        <section
+          v-for="edition in editions"
+          :key="edition.name"
+          class="vote-group"
+          :class="{ open: edition._open }"
+        >
+          <button class="vote-group-header" @click="edition._open = !edition._open">
+            <span class="vg-title">
+              {{ edition.name }}
+              <span v-if="edition.theme" class="vg-theme">— {{ edition.theme }}</span>
+            </span>
+            <span class="vg-count">{{ edition.maps.length }} maps</span>
+          </button>
+
+          <div class="vote-group-body">
+            <MapRow
+              v-for="map in edition.maps"
+              :key="map.mapUid"
+              :map="map"
+              :subtitle="mapSubtitle(map)"
+              :voted="myVotes.has(map.mapUid)"
+              @voted="(voted) => onVoted(map.mapUid, voted)"
+            />
+          </div>
+        </section>
+      </template>
     </template>
   </div>
 </template>
@@ -95,6 +153,39 @@ load();
 #maps-root {
   max-width: 820px;
   margin: 0 auto;
+}
+
+.filter-buttons {
+  margin: 20px auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 10px;
+  max-width: 640px;
+}
+
+.filter-btn {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 22px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border 0.15s;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-text-bright);
+}
+
+.show-more {
+  display: block;
+  margin: 16px auto;
 }
 
 .vote-group {
@@ -159,5 +250,29 @@ load();
 
 .vote-group.open .vote-group-body {
   display: block;
+}
+
+/* "Top Maps" reuses the edition group chrome with no header; each row gets a
+   rank number to the left of the regular MapRow. */
+.top-maps .vote-group-body {
+  border-top: none;
+}
+
+.top-map-row {
+  display: flex;
+  align-items: center;
+}
+
+.top-rank {
+  width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--color-text-dim);
+  font-size: 0.9rem;
+}
+
+.top-map-entry {
+  flex: 1;
+  min-width: 0;
 }
 </style>
