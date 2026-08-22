@@ -4,9 +4,11 @@
      `voted` (its own myVotes Set) and gets an update via @voted; this
      component only knows about a single row. -->
 <script setup>
+import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
+import { fetchTmxId } from '../utils/tmxId';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
 import StyleTags from './StyleTags.vue';
@@ -19,6 +21,41 @@ const props = defineProps({
 const emit = defineEmits(['voted']);
 
 const session = useSessionStore();
+
+// The TMX id for the "copy id" action — unknown (undefined) until the row is
+// first hovered, then a number, or null when the map isn't on TMX (fetch
+// failures read the same way: no button, which is the safe degradation).
+const tmxId = ref(undefined);
+const copied = ref(false);
+let copiedTimer = null;
+
+function onRowEnter() {
+  if (tmxId.value === undefined) fetchTmxId(props.map.mapUid).then((id) => (tmxId.value = id));
+}
+
+async function copyTmxId() {
+  const text = String(tmxId.value);
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // http fallback (dev / non-TLS mirror): the hidden-textarea classic.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    copied.value = true;
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => (copied.value = false), 1500);
+  } catch (e) {
+    // Clipboard denied — leave the button as it was, nothing to fall back to.
+  }
+}
 
 async function toggleVote() {
   if (!session.isLoggedIn) {
@@ -48,7 +85,7 @@ function onThumbError(e) {
 </script>
 
 <template>
-  <div class="map-row">
+  <div class="map-row" @mouseenter="onRowEnter">
     <img
       v-if="map.thumbnailUrl"
       class="map-thumb"
@@ -64,6 +101,35 @@ function onThumbError(e) {
       <RouterLink class="map-name" :to="{ name: 'map', params: { mapUid: map.mapUid } }">{{ map.name }}</RouterLink>
       <div class="map-author">{{ subtitle }}</div>
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
+    </div>
+    <div class="row-actions">
+      <a
+        class="icon-btn"
+        :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
+        target="_blank"
+        rel="noopener"
+        title="Download on trackmania.io"
+        aria-label="Download on trackmania.io"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
+        </svg>
+      </a>
+      <button
+        v-if="tmxId != null"
+        class="icon-btn"
+        :class="{ ok: copied }"
+        :title="copied ? 'Copied!' : `Copy TMX id (${tmxId})`"
+        :aria-label="copied ? 'TMX id copied' : 'Copy TMX id'"
+        @click="copyTmxId"
+      >
+        <svg v-if="!copied" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m4 12.5 5 5L20 6.5" />
+        </svg>
+      </button>
     </div>
     <button
       class="vote-btn vote-btn-sm"
@@ -125,6 +191,62 @@ function onThumbError(e) {
 .map-author {
   color: var(--color-text-dim);
   font-size: 0.8rem;
+}
+
+/* Hover actions: download (always) + copy TMX id (when the map is on TMX).
+   Hidden until the row is hovered on pointer devices, always visible on
+   touch (there is no hover to reveal them) and via keyboard (:focus-within). */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+@media (hover: hover) {
+  .map-row:hover .row-actions,
+  .map-row:focus-within .row-actions {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .row-actions {
+    opacity: 1;
+  }
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.icon-btn:hover {
+  color: var(--color-text-bright);
+  border-color: var(--color-text-bright);
+}
+
+.icon-btn.ok {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .vote-btn {

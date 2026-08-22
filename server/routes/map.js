@@ -10,6 +10,20 @@ const { TMIO_USER_AGENT } = require('../config');
 
 const router = Router();
 
+// GET /api/map/:mapUid/tmx — public. Just the TMX lookup, nothing else: the
+// maps list calls this on row hover to get the map's TMX id for the "copy
+// id" action, so it must stay light — no leaderboard, no co-author fan-out.
+router.get('/map/:mapUid/tmx', async (req, res) => {
+  try {
+    const tmx = await lookupMapByUid(req.params.mapUid, TMIO_USER_AGENT);
+    res.json({ tmxId: tmx ? tmx.trackId : null });
+  } catch (e) {
+    // TMX network/5xx — the client just doesn't get the copy button.
+    console.error('tmx lookup failed', String(e));
+    res.status(502).json({ error: 'tmx_unavailable' });
+  }
+});
+
 // GET /api/map/:mapUid — public. Map details + external links (trackmania.io,
 // TMX) + top-5 leaderboard, all best-effort: the external calls can't take
 // the page down if trackmania.io/TMX are slow or the map isn't listed there.
