@@ -4,6 +4,7 @@ const { optionalAuth } = require('../middleware/auth');
 const { canon, groupMembers } = require('../services/links');
 const { fetchMapLeaderboard } = require('../services/tmio');
 const { lookupMapByUid, parseTagIds, getTagsTable } = require('../services/tmx');
+const { updateMapTmxStyles } = require('../services/catalog');
 const { getCoauthors } = require('../services/coauthors');
 const { lookupMany } = require('../services/names');
 const { TMIO_USER_AGENT } = require('../config');
@@ -97,6 +98,27 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     : tmxLookupFailed
       ? !(map.tmx_styles_updated_at && style == null && tags.length === 0)
       : false;
+
+  // The live lookup already paid for itself — feed a positive hit back into
+  // the cached columns when they're still empty. The sync rotation only
+  // rechecks a map every ~30 days, so without this a map uploaded to TMX
+  // would linger on the /missing-tmx page for weeks even though every map
+  // page visit proves it's there now. Only a hit with an actual style/tags
+  // is written, and only when the DB has nothing — no writes on every view,
+  // and no "confirmed absent" stamps for TMX maps that simply carry no tags.
+  if (tmx && (tmx.style || tmx.tagsRaw) && !map.tmx_style && !map.tmx_tags) {
+    try {
+      await updateMapTmxStyles({
+        mapUid,
+        style: tmx.style || null,
+        tags: tmx.tagsRaw || null,
+      });
+    } catch (e) {
+      // Migration 007 not applied / DB hiccup — the page is unaffected, the
+      // sync rotation stays the source of truth.
+      console.error('tmx style writeback failed', String(e));
+    }
+  }
 
   // Co-authors (collaborations): admin-managed extras beyond the single
   // Nadeo-credited author. getCoauthors degrades to [] when migration 008

@@ -30,6 +30,14 @@ const routes = [
     component: () => import('../views/MapView.vue'),
     meta: { navGroup: 'maps' },
   },
+  {
+    path: '/missing-tmx',
+    name: 'missing-tmx',
+    component: () => import('../views/MissingTmxView.vue'),
+    // A quiet community page, not a nav entry — highlight Maps while on it
+    // (the list is map maintenance, same pattern as /map → maps).
+    meta: { navGroup: 'maps' },
+  },
   { path: '/onboarding', name: 'onboarding', component: () => import('../views/OnboardingView.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue') },
   {

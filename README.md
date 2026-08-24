@@ -91,4 +91,4 @@ trackmania.io. Ручной триггер — `POST /api/sync` с заголо�
 
 ## Credits
 
-onrd.., Soba, Rezzn, DamnedLight
+onrd.., Soba, Rezzn, DamnedLight, esvalirion

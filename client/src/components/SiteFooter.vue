@@ -1,4 +1,6 @@
 <script setup>
+import { RouterLink } from 'vue-router';
+
 const DISCORDS = [
   { href: 'https://discord.gg/VWaTmrXmh5', label: 'Ditchfest (EN)' },
   {
@@ -31,6 +33,14 @@ const DISCORDS = [
         <img class="discord-icon" src="/res/github.svg" alt="" />
         <span>Github</span>
       </a>
+      <!-- Internal link, same row: the quiet entry point to the community
+           "maps missing from TMX" page — findable, but not nav material. -->
+      <RouterLink class="discord-link-item" :to="{ name: 'missing-tmx' }">
+        <svg class="discord-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
+        </svg>
+        <span>Missing on TMX</span>
+      </RouterLink>
     </div>
     <p class="developer-info">Credits: onrd.., Soba, Rezzn, DamnedLight, esvalirion</p>
     <div class="copyright">Fuck you ditchfest mappers © 2025-2026</div>

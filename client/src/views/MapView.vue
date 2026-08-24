@@ -191,6 +191,15 @@ watch(() => route.params.mapUid, load, { immediate: true });
         <div class="map-links">
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
+          <!-- Confirmed absence → link to the community list where the map can
+               be picked up for upload; a plain non-link pill stays for the
+               "TMX unreachable" case (tmxUrl null while onTmx is not false). -->
+          <RouterLink
+            v-else-if="map.onTmx === false"
+            class="map-link-btn map-link-btn-disabled map-link-btn-link"
+            :to="{ name: 'missing-tmx' }"
+            title="See all maps missing from TMX"
+          >Not on TMX</RouterLink>
           <span v-else class="map-link-btn map-link-btn-disabled">Not on TMX</span>
         </div>
 
@@ -415,6 +424,19 @@ watch(() => route.params.mapUid, load, { immediate: true });
 }
 
 .map-link-btn-disabled:hover {
+  border: 1px solid var(--color-border);
+  background: none;
+}
+
+/* Confirmed-absent variant: still visually quiet, but a real link to
+   /missing-tmx. Later in the file than the -disabled:hover rule above so
+   the same-specificity hover wins. */
+.map-link-btn-link {
+  cursor: pointer;
+}
+
+.map-link-btn-link:hover {
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
   background: none;
 }
