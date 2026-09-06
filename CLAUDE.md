@@ -288,6 +288,34 @@ display_name, name)`, пустые и `hidden` эдишены отбрасыва
 сейчас захардкожены; когда переедут в админку — `FEST_ANCHOR`/`interval` будут
 читаться из БД, а `HomeView.vue` лишь подставит значения.
 
+**Блок Activities (фан-активности)** — таб-панель между «последним дичфестом»
+и графиком. Реестр активностей — `client/src/data/homeActivities.js` (по образцу
+`signStudioFormats.js`): каждая запись = `{ kind, label, description,
+ctaLabel, routeName, background }`, UI блока (табы/описание/CTA/фон)
+генерируется из реестра через `v-for` — новая активность = запись в реестре
++ маршрут, без правок `HomeView.vue`. По умолчанию выбрана первая
+(`DEFAULT_ACTIVITY_KIND`). `background` — картинка активности как тихий
+полупрозрачный слой поверх стандартной `.panel`-карточки (блок нарочно
+выглядит как соседние панели) с тем же лёгким параллаксом за курсором,
+что и у latest-карточки (`--act-x`/`--act-y` из `handleActivitiesMove`).
+Фоны лежат в `public/res/activities/` (onboarding → `ditchfest.jpg`,
+mappers → `scarymappers.jpg`, ditchfests → `cube.jpg`).
+Тирлисты (мапперов/дичфестов) — реальные страницы `/tierlist/mappers` и
+`/tierlist/ditchfests`: один `TierlistView.vue` на оба маршрута (различает
+по `route.name`, без меты), заголовок/описание берёт из того же реестра.
+Классическая TierMaker-доска S/A/B/C/D/idk + пул неранжированного внизу;
+чипы — `components/TierlistChip.vue` (текстовые пилюли для мапперов,
+карточки с обложкой для эдишенов; у эдишенов без обложки — заглушка
+с номером эдишена в том же формате карточки). Элементы — `GET /api/results/mappers`
+(только реально имеющие карты, сортировка по имени) и `GET /api/editions`.
+Перетаскивание — нативный HTML5 drag&drop (десктоп; тач не поддерживается —
+страница заточена под скриншоты). **На сервер не пишется ничего**: раскладка
+живёт в `localStorage` (свой ключ на тирлист; при загрузке выметаются id,
+которых больше нет в каталоге, новое появляется в пуле), Reset —
+двухшаговый (первый клик взводит кнопку на 3 сек), сбрасывает всё в пул.
+Онбординг-таб ведёт на реальный `/onboarding`. Маршруты активностей — не
+вкладки NavBar, `meta.navGroup` у них сознательно нет (как у `/onboarding`).
+
 ## Sign Studio (`client/src/views/StudioView.vue`, `client/src/components/SignStudio.vue`, `client/src/utils/gradientRenderer.js`, `client/src/data/signStudioGradients.js`, `client/src/data/signStudioFormats.js`)
 
 Клиентский «конструктор фонов» для знаков Trackmania — отдельный маршрут

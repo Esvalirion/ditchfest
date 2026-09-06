@@ -38,6 +38,22 @@ const routes = [
     // (the list is map maintenance, same pattern as /map → maps).
     meta: { navGroup: 'maps' },
   },
+  // Fan activities linked from the home block. Both tierlists share one real
+  // view (TierlistView tells mappers/ditchfests apart by route name): a
+  // TierMaker-style board that is purely client-side — rankings live in
+  // localStorage, nothing is ever sent to the server. Like onboarding, they
+  // are home-block destinations, not nav entries — no meta.navGroup on
+  // purpose.
+  {
+    path: '/tierlist/mappers',
+    name: 'tierlist-mappers',
+    component: () => import('../views/TierlistView.vue'),
+  },
+  {
+    path: '/tierlist/ditchfests',
+    name: 'tierlist-ditchfests',
+    component: () => import('../views/TierlistView.vue'),
+  },
   { path: '/onboarding', name: 'onboarding', component: () => import('../views/OnboardingView.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue') },
   {

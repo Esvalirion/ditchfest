@@ -12,6 +12,7 @@ import {
   Filler,
 } from 'chart.js';
 import { api } from '../utils/api';
+import { ACTIVITIES, DEFAULT_ACTIVITY_KIND, findActivity } from '../data/homeActivities';
 
 // Tree-shakeable Chart.js: register only the pieces the line chart needs.
 Chart.register(LineController, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler);
@@ -29,6 +30,27 @@ const latestCard = ref(null);
 /** The best map's thumbnail URL, when there is one — used as the card's
  *  moving background. Falls back to null (no background image). */
 const heroImage = computed(() => stats.value?.latest?.topMaps?.[0]?.thumbnailUrl || null);
+
+// --- Activities block --------------------------------------------------------
+// Tabbed teaser between the latest-edition panel and the chart. The registry
+// (client/src/data/homeActivities.js) drives the tabs/description/CTA — the
+// first activity is selected by default.
+const activeActivityKind = ref(DEFAULT_ACTIVITY_KIND);
+const activeActivity = computed(() => findActivity(activeActivityKind.value));
+
+const activitiesPanel = ref(null);
+
+/** The same light parallax as the latest-edition card: the cursor within the
+ *  panel nudges the background wash a couple of px via CSS variables. */
+function handleActivitiesMove(e) {
+  const el = activitiesPanel.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
+  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
+  el.style.setProperty('--act-x', `${x}px`);
+  el.style.setProperty('--act-y', `${y}px`);
+}
 
 /** Parallax over the latest-edition card: the cursor position within the card
  *  nudges the background a few px, same idea as the site-wide ParallaxBackground
@@ -307,6 +329,41 @@ onBeforeUnmount(() => {
                 <span class="top-mapper-votes">{{ stats.latest.topMapper.votes }}</span>
               </RouterLink>
             </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Activities: tabbed teaser; the CTA leads to the activity's
+           page (stubs for the tierlists, the real onboarding flow). -->
+      <section class="activities-row">
+        <article
+          ref="activitiesPanel"
+          class="panel activities-panel"
+          :class="`activity-${activeActivity.kind}`"
+          @mousemove="handleActivitiesMove"
+        >
+          <div
+            class="activities-hero"
+            :style="{ backgroundImage: `url(${activeActivity.background})` }"
+            aria-hidden="true"
+          ></div>
+          <div class="activities-content">
+            <h2 class="panel-title">Activities</h2>
+            <div class="activity-tabs" role="tablist" aria-label="Activities">
+              <button
+                v-for="a in ACTIVITIES"
+                :key="a.kind"
+                class="activity-tab"
+                role="tab"
+                :class="{ active: a.kind === activeActivityKind }"
+                :aria-selected="a.kind === activeActivityKind"
+                @click="activeActivityKind = a.kind"
+              >{{ a.label }}</button>
+            </div>
+            <p class="activity-description">{{ activeActivity.description }}</p>
+            <RouterLink class="activity-cta" :to="{ name: activeActivity.routeName }">
+              {{ activeActivity.ctaLabel }} →
+            </RouterLink>
           </div>
         </article>
       </section>
@@ -604,4 +661,110 @@ onBeforeUnmount(() => {
   font-weight: bold;
   color: var(--color-accent-text);
 }
+
+/* --- Fan activities block (between latest edition and chart) ------------ */
+.activities-row {
+  margin-bottom: 16px;
+}
+
+/* Sibling of .latest-panel / .chart-panel: the same .panel card look (overlay
+ * background, soft border, shadow). The activity's image is a quiet
+ * translucent wash over that card rather than a heavy backdrop, so the block
+ * reads like its neighbours; swapping the registry URL still retints it. */
+.activities-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.activities-hero {
+  position: absolute;
+  /* Slightly oversized (inset: -6%) so the few-px parallax shift never
+   * reveals an empty edge; --act-x/--act-y are set by handleActivitiesMove
+   * (mousemove), same idea as the latest-edition card's hero. */
+  inset: -6%;
+  background-size: cover;
+  background-position: center;
+  transform: translate(var(--act-x, 0px), var(--act-y, 0px));
+  transition: transform 0.2s ease-out;
+  opacity: 0.16;
+  filter: saturate(0.85);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.activities-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* Same heading treatment as the chart panel's title; margins collapse to
+ * zero so the column gap alone sets the rhythm. */
+.activities-panel .panel-title {
+  margin: 0;
+}
+
+.activity-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Sibling of .filter-btn from the Signs gallery (same tokens, tighter
+ * padding) so the two tab rows read as one family. */
+.activity-tab {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.activity-tab:hover {
+  color: var(--color-text-bright);
+  border-color: var(--color-text-bright);
+}
+
+.activity-tab.active {
+  color: var(--color-text-bright);
+  border-color: var(--color-text-bright);
+  background: var(--color-overlay-4);
+}
+
+.activity-description {
+  margin: 0;
+  max-width: 640px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* Same accent treatment as the "Studio →" CTA in the Signs gallery: an
+ * accent-bordered link that navigates somewhere, not a filter. The extra
+ * large top margin (on top of the column gap) pushes the button well down
+ * so the panel fills noticeably more vertical space. */
+.activity-cta {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  padding: 10px 22px;
+  margin-top: 122px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent-text);
+  font-size: 0.95rem;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.activity-cta:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+
 </style>
