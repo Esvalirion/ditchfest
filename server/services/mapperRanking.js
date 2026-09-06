@@ -13,7 +13,9 @@ const { lookupMany } = require('./names');
  *
  *  Grouped by identity (see links.js canon()): a mapper with a linked alt
  *  gets one row pooling all their maps, and a voter's linked accounts
- *  voting for the same map still only count once. `maps` is a DISTINCT
+ *  voting for the same map still only count once. The row is labeled with
+ *  the PRIMARY account's name whenever one is known — never the alt's (see
+ *  the name-resolution pass below). `maps` is a DISTINCT
  *  count because the LEFT JOIN to votes fans map rows out per vote.
  *
  *  A map counts for every credited author: the primary author_account_id
@@ -43,17 +45,19 @@ async function getMapperResults() {
     }
   }
 
-  // Co-authors have no map row of their own, so MAX(m.author_name) comes back
-  // NULL for them — resolve those names live via the TM OAuth API (best-effort,
-  // a TM hiccup leaves name null rather than throwing). Primary authors whose
-  // synced author_name is still missing get resolved here too, same path the
-  // catalog sync fills in eventually. Pure voters (no maps at all) have no
-  // author_name either and ride the same path.
-  const missing = rows.filter((r) => !r.name).map((r) => r.account_id);
+  // Names: prefer the nick the PRIMARY account itself authored maps under —
+  // a linked alt that shipped its own maps must not relabel the identity (the
+  // old single MAX(author_name) picked whichever member's nick sorts last).
+  // Rows without a primary-authored name (alt-authored-only groups, pure
+  // co-authors, primary authors whose synced author_name is still missing,
+  // pure voters) resolve the primary's current nick live via the TM OAuth API
+  // — best-effort, a TM hiccup falls back to any member's synced nick rather
+  // than throwing.
+  const missing = rows.filter((r) => !r.primary_name).map((r) => r.account_id);
   const resolved = missing.length ? await lookupMany(missing) : new Map();
   return rows.map((r) => ({
     accountId: r.account_id,
-    name: r.name || resolved.get(r.account_id) || null,
+    name: r.primary_name || resolved.get(r.account_id) || r.name || null,
     votes: r.votes,
     maps: r.maps,
     castVotes: r.cast_votes,
@@ -79,7 +83,11 @@ function rankingQuery(withCoauthors) {
     ),
     ranked AS (
       SELECT ${authorCanon} AS account_id,
+             -- Any member's authoring nick (legacy label / last-resort
+             -- fallback) and the primary's own authoring nick (preferred —
+             -- see the name-resolution pass in getMapperResults).
              MAX(CASE WHEN a.account_id = m.author_account_id THEN m.author_name END) AS name,
+             MAX(CASE WHEN ${authorCanon} = m.author_account_id THEN m.author_name END) AS primary_name,
              COUNT(DISTINCT a.map_uid || '|' || ${voterCanon})::int AS votes,
              COUNT(DISTINCT a.map_uid)::int AS maps
       FROM map_authors a
@@ -99,12 +107,13 @@ function rankingQuery(withCoauthors) {
     )
     SELECT account_id,
            r.name,
+           r.primary_name,
            COALESCE(r.votes, 0)::int AS votes,
            COALESCE(r.maps, 0)::int AS maps,
            COALESCE(v.cast_votes, 0)::int AS cast_votes
     FROM ranked r
     FULL OUTER JOIN voters v USING (account_id)
-    ORDER BY votes DESC, name ASC NULLS LAST
+    ORDER BY votes DESC, COALESCE(r.primary_name, r.name) ASC NULLS LAST
   `;
 }
 
