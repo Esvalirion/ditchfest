@@ -23,7 +23,7 @@ const KIND_BY_ROUTE = {
 };
 
 // What each board ranks and where its layout is stored. load() normalizes
-// everything to {id, label, card?, media?} — the rest of the view is
+// everything to {id, label, card?, media?, theme?} — the rest of the view is
 // kind-agnostic.
 const BOARDS = {
   'mappers-tierlist': {
@@ -54,6 +54,7 @@ const BOARDS = {
         label: e.name,
         card: true,
         media: e.media,
+        theme: e.theme || null,
       }));
     },
   },
