@@ -46,7 +46,7 @@ const earned = props.achievement.earned !== false;
 /* Earned: green, the same colour a cast vote uses elsewhere on the site. */
 .ach-item.earned {
   border-color: var(--color-accent);
-  background-color: rgba(46, 125, 50, 0.12);
+  background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 /* Not earned yet. Fully opaque — a locked badge should read as "still to get",
@@ -65,11 +65,11 @@ const earned = props.achievement.earned !== false;
 }
 
 .ach-item.locked .ach-name {
-  color: #8a8a8a;
+  color: var(--color-text-dim);
 }
 
 .ach-item.locked .ach-desc {
-  color: #5c5c5c;
+  color: var(--color-text-faintest);
 }
 
 .ach-status {
@@ -84,7 +84,7 @@ const earned = props.achievement.earned !== false;
 }
 
 .ach-item.locked .ach-status {
-  color: #6b6b6b;
+  color: var(--color-text-faint);
 }
 
 /* Unlock condition on hover (data-hint is set above when present). */
@@ -103,7 +103,7 @@ const earned = props.achievement.earned !== false;
   line-height: 1.35;
   box-shadow: var(--shadow-popover);
   pointer-events: none;
-  z-index: 50;
+  z-index: var(--z-tooltip);
 }
 
 .ach-icon {

@@ -35,6 +35,39 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 `server/app.js` отдаёт API и `express.static(server/public)` с fallback на
 `index.html` для клиентских маршрутов.
 
+## Стили клиента: токены → общие классы → scoped
+
+Три уровня, в порядке приоритета при добавлении нового:
+
+1. **`client/src/styles/tokens.css`** — все цвета (палитра тёмной темы,
+   лестницы серого текста/бордеров, alpha-оверлеи), радиусы, тени,
+   `--font-family-base`/`--font-family-mono`, **z-слои** (`--z-nav` <
+   `--z-toast` < `--z-tooltip` < `--z-popover` < `--z-topmost`) и
+   **длительности transition** (`--transition-instant/fast/medium/slow`).
+   Новое значение цвета/отступа сначала ищется здесь; производные прозрачности
+   делаются через `color-mix(in srgb, var(--token) N%, transparent)`, а не
+   рукописным `rgba()` (canvas — исключение: Chart.js не понимает `color-mix`,
+   там хелпер `withAlpha()` в `HomeView.vue`).
+2. **`client/src/styles/base.css`** — глобальный reset + кросc-страничные
+   классы, которые раньше копипастились: `.auth-btn`, `.filter-btn`,
+   `.icon-btn`, `.vote-btn`, `.ach-empty`, `.back-link`, `.map-thumb` /
+   `.map-name` / `.map-author`, admin-набор (`.admin-card`/`-label`/`-input`/
+   `-msg`/`-err`/`-row`…), `.parallax-hero` (общий дрейфующий фон карточек)
+   и `:focus-visible`-кольцо. Два канонических размера кнопок-табов: большой
+   (`.filter-btn`, 10px 22px / 1rem) и компактный (8px 16px / 0.9rem —
+   студийные тулбары, activities-табы) — третьего не заводить.
+3. **`<style scoped>` компонента** — только то, что уникально для него.
+
+Параллакс hero-фонов (`--hero-x/--hero-y` по mousemove) — один composable
+`useParallax(getEl)` в `client/src/utils/parallax.js`; класс `.parallax-hero`
+даёт механику (absolute, inset −6%, translate по переменным), компонент
+добавляет только свой filter/opacity.
+
+`MapRow.vue` — общая строка карты. Пропы: `votable: false` прячет кнопку
+голосования (страница Missing on TMX), `actionsVisibility: 'hover' | 'always'`
+управляет показом кластера действий, слот `#actions` заменяет дефолтный набор
+(download + copy TMX id) своим.
+
 ## Карта модулей (`server/`)
 
 | Файл | Зона ответственности |
@@ -158,15 +191,9 @@ TMX API хранит стиль и теги по-разному, и это ва�
 колонки); для ещё не проверенной карты `onTmx: true`, и «Not on TMX» не
 рисуется.
 
-**Совместимость с неприменённой миграцией 007.** Оба SELECT'а, которые читают
-`tmx_*` (`getEditions` и `/api/map/:uid`), сначала идут с style-колонками, а при
-ошибке Postgres `42703` (undefined_column — миграция 007 ещё не наложена)
-молча повторяют тот же запрос без них и работают дальше, просто без тегов
-стилей. Сделано, чтобы деплой кода мог опережать деплой миграции на проде; как
-только 007 применена везде — этот fallback мёртвый код. Сами style-колонки
-пишет только синк (`services/catalog.js` `updateMapTmxStyles`/
-`getMapsMissingTmxStyles`), и его TMX-свип обёрнут в try/catch — без 007 он
-логирует ошибку каждый прогон, но синк не ломает.
+Style-колонки пишет только синк (`services/catalog.js`
+`updateMapTmxStyles`/`getMapsMissingTmxStyles`), и его TMX-свип обёрнут в
+try/catch — сетевой сбой свипа логируется, но синк не ломает.
 
 ## Страница «Not on TMX» (`/missing-tmx`, `routes/missing.js` + `services/missingTmx.js`, `client/src/views/MissingTmxView.vue`)
 
@@ -179,9 +206,7 @@ TMX API хранит стиль и теги по-разному, и это ва�
 это не подтверждённое отсутствие). Маршрут подсвечивает вкладку Maps через
 `meta.navGroup`. Эффективная кампания и видимость эдишена — по правилам
 `getEditions()` (`COALESCE(display_campaign_id, campaign_id)`, скрытые папки
-отбрасываются): чего нет в каталоге, нет и в списке. Фоллбек на случай
-неприменённой миграции 007 — пустой список (`[]`), не ретрай без колонок:
-без `tmx_*` подтверждённых отсутствий не бывает.
+отбрасываются): чего нет в каталоге, нет и в списке.
 
 `routes/map.js` при живом TMX-lookup на странице карты пишет положительный хит
 обратно в кеш-колонки (`updateMapTmxStyles`), если в БД стиль/теги пусты:
@@ -195,12 +220,12 @@ true убирает строку сразу. Известная дыра
 (не чинится сознательно): карта, реально лежащая на TMX без StyleName и
 тегов, проходит по формальному критерию как «не на TMX».
 
-## Соавторы карт / коллаборации (`services/coauthors.js`, `routes/coauthors.js`, миграция 008)
+## Соавторы карт / коллаборации (`services/coauthors.js`, `routes/coauthors.js`)
 
 Nadeo кредитует у карты одного автора (`maps.author_account_id`), но реально
 карту могут строить несколько мапперов (коллаборации). Соавторов добавляет
 админ вручную — на странице карты (`MapView.vue`, admin-only блок), по
-accountId, любое число. Хранятся в `map_coauthors` (миграция `008_map_coauthors.sql`)
+accountId, любое число. Хранятся в `map_coauthors` (`008_map_coauthors.sql`)
 — отдельная many-to-many таблица, не колонка на `maps`, потому что соавторов
 может быть сколько угодно.
 
@@ -219,16 +244,6 @@ Nadeo. Соавторы живут отдельно и переживают ка
 иначе альт-аккаунт соавтора считался бы отдельной личностью. Дедуп
 основного автора и соавтора (если админ случайно добавил автора же) идёт на
 уровне `GROUP BY canon(account_id)`.
-
-**Совместимость с неприменённой миграцией 008** — тот же трюк, что у 007:
-каждое чтение, трогающее `map_coauthors`, ловит Postgres-ошибку `42P01`/
-`42703` (undefined_table/undefined_column) через `isCoauthorsMissing()` в
-`services/coauthors.js` (для батчей/одиночных) или `queryWithCoauthorFallback()`
-в `services/grants.js` (для парных запросов с/без соавторов) и тихо откатывается
-к «без соавторов» — рейтинг, ачивки, каталог работают как до 008. Запись
-(`POST /api/map/:mapUid/coauthors`) на отсутствующей таблице возвращает
-**503 `migration_pending`** — админ видит «фича ещё не включена», а не 500.
-Как только 008 применена везде — все эти fallback'и мёртвый код.
 
 ## Кампании-«папки» и переопределения (`routes/campaigns.js`, `services/editions.js`)
 
@@ -297,7 +312,9 @@ ctaLabel, routeName, background }`, UI блока (табы/описание/CTA
 (`DEFAULT_ACTIVITY_KIND`). `background` — картинка активности как тихий
 полупрозрачный слой поверх стандартной `.panel`-карточки (блок нарочно
 выглядит как соседние панели) с тем же лёгким параллаксом за курсором,
-что и у latest-карточки (`--act-x`/`--act-y` из `handleActivitiesMove`).
+что и у latest-карточки (общий `useParallax()` → `--hero-x`/`--hero-y`,
+класс `.parallax-hero`). Таб-стрип — полноценный ARIA Tabs (roving
+tabindex, стрелки/Home/End, `aria-controls` на панель).
 Фоны лежат в `public/res/activities/` (onboarding → `ditchfest.jpg`,
 mappers → `scarymappers.jpg`, ditchfests → `cube.jpg`).
 Тирлисты (мапперов/дичфестов) — реальные страницы `/tierlist/mappers` и

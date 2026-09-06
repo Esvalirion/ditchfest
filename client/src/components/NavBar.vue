@@ -51,7 +51,7 @@ function isActive(navName) {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  z-index: 10;
+  z-index: var(--z-nav);
 }
 
 .nav-link {
@@ -61,7 +61,7 @@ function isActive(navName) {
   padding: 8px 14px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .nav-link:hover {

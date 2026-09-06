@@ -6,58 +6,32 @@ const { refreshAccount } = require('../services/grants');
 const { groupMembers, groupAlts } = require('../services/links');
 const { lookupOne } = require('../services/names');
 const { getMapperResults } = require('../services/mapperRanking');
-const { isCoauthorsMissing } = require('../services/coauthors');
 const { canon } = require('../services/links');
 
 const router = Router();
 
 /** Every map this identity is credited on (primary author OR co-author, across
- *  all linked accounts), most-voted first. Co-authored maps come from
- *  map_coauthors (migration 008); if that table isn't applied yet the query
- *  errors and we retry the legacy primary-authors-only form. */
+ *  all linked accounts), most-voted first. */
 async function getMapperMaps(members) {
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
-  // mapSelect is a WHERE-less SELECT; each call site adds its own predicate
-  // (by map_uid set, or by author). It must NOT carry a WHERE against ${ph},
-  // because ${ph} is a list of accountIds, not map_uids — such a clause would
-  // match nothing and silently zero out the map list.
-  const mapSelect = `
-    SELECT m.map_uid, m.name, m.thumbnail_url, e.name AS edition_name,
-           (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
-              WHERE v.map_uid = m.map_uid) AS votes
-     FROM maps m
-     LEFT JOIN editions e ON e.campaign_id = m.campaign_id
-  `;
-  let rows;
-  try {
-    // CTE gathers this identity's map_uids from both author arms, then joins
-    // back to maps for the row. UNION dedups a map where the identity is both
-    // primary author and listed as a co-author.
-    rows = (
-      await pool.query(
-        `WITH my_maps AS (
-           SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
-           UNION
-           SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph})
-         )
-         ${mapSelect} WHERE m.map_uid IN (SELECT map_uid FROM my_maps)
-         ORDER BY votes DESC, m.name ASC`,
-        members
-      )
-    ).rows;
-  } catch (e) {
-    if (isCoauthorsMissing(e)) {
-      rows = (
-        await pool.query(
-          `${mapSelect} WHERE m.author_account_id IN (${ph})
-           ORDER BY votes DESC, m.name ASC`,
-          members
-        )
-      ).rows;
-    } else {
-      throw e;
-    }
-  }
+  // CTE gathers this identity's map_uids from both author arms, then joins
+  // back to maps for the row. UNION dedups a map where the identity is both
+  // primary author and listed as a co-author.
+  const { rows } = await pool.query(
+    `WITH my_maps AS (
+       SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
+       UNION
+       SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph})
+     )
+     SELECT m.map_uid, m.name, m.thumbnail_url, e.name AS edition_name,
+            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
+               WHERE v.map_uid = m.map_uid) AS votes
+      FROM maps m
+      LEFT JOIN editions e ON e.campaign_id = m.campaign_id
+      WHERE m.map_uid IN (SELECT map_uid FROM my_maps)
+      ORDER BY votes DESC, m.name ASC`,
+    members
+  );
   return rows.map((r) => ({
     mapUid: r.map_uid,
     name: r.name,

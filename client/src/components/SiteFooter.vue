@@ -73,7 +73,7 @@ footer {
   gap: 10px;
   text-decoration: none;
   color: var(--color-text);
-  transition: transform 0.2s;
+  transition: transform var(--transition-medium);
 }
 
 .discord-link-item:hover {
@@ -87,7 +87,7 @@ footer {
 .discord-icon {
   width: 32px;
   height: 32px;
-  transition: opacity 0.2s;
+  transition: opacity var(--transition-medium);
   opacity: 0.8;
 }
 

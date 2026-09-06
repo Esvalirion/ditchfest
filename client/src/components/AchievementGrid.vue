@@ -16,11 +16,7 @@ defineProps({
 </template>
 
 <style scoped>
-.ach-empty {
-  color: var(--color-text-dimmer);
-  font-size: 0.9rem;
-  margin: 16px 0;
-}
+/* .ach-empty lives in base.css (shared with the detail pages). */
 
 .ach-grid {
   display: grid;

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import {
   Chart,
@@ -12,6 +12,7 @@ import {
   Filler,
 } from 'chart.js';
 import { api } from '../utils/api';
+import { useParallax } from '../utils/parallax';
 import { ACTIVITIES, DEFAULT_ACTIVITY_KIND, findActivity } from '../data/homeActivities';
 
 // Tree-shakeable Chart.js: register only the pieces the line chart needs.
@@ -40,29 +41,23 @@ const activeActivity = computed(() => findActivity(activeActivityKind.value));
 
 const activitiesPanel = ref(null);
 
-/** The same light parallax as the latest-edition card: the cursor within the
- *  panel nudges the background wash a couple of px via CSS variables. */
-function handleActivitiesMove(e) {
-  const el = activitiesPanel.value;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
-  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
-  el.style.setProperty('--act-x', `${x}px`);
-  el.style.setProperty('--act-y', `${y}px`);
-}
+// Same light parallax for both hero panels — see utils/parallax.js.
+const handleActivitiesMove = useParallax(() => activitiesPanel.value);
+const handleLatestMove = useParallax(() => latestCard.value);
 
-/** Parallax over the latest-edition card: the cursor position within the card
- *  nudges the background a few px, same idea as the site-wide ParallaxBackground
- *  but scoped to this element. Bound/unbound with the card's lifecycle. */
-function handleLatestMove(e) {
-  const el = latestCard.value;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
-  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
-  el.style.setProperty('--hero-x', `${x}px`);
-  el.style.setProperty('--hero-y', `${y}px`);
+// Keyboard support for the activities tab strip (ARIA Tabs: roving tabindex +
+// arrow keys move between tabs). Home/End jump to the first/last tab.
+function onTabKeydown(e) {
+  const i = ACTIVITIES.findIndex((a) => a.kind === activeActivityKind.value);
+  let next = null;
+  if (e.key === 'ArrowRight') next = (i + 1) % ACTIVITIES.length;
+  else if (e.key === 'ArrowLeft') next = (i - 1 + ACTIVITIES.length) % ACTIVITIES.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = ACTIVITIES.length - 1;
+  if (next == null) return;
+  e.preventDefault();
+  activeActivityKind.value = ACTIVITIES[next].kind;
+  nextTick(() => document.getElementById(`activity-tab-${ACTIVITIES[next].kind}`)?.focus());
 }
 
 // English pluralization: singular only for exactly 1, plural otherwise.
@@ -130,6 +125,16 @@ function token(name, fallback) {
   return v || fallback;
 }
 
+/** Alpha variant of a hex colour for the canvas fill (Chart.js can't consume
+ *  color-mix()); falls back to the default accent when the token resolves to
+ *  something non-hex. */
+function withAlpha(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
+  if (!m) return `rgba(46, 125, 50, ${alpha})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 function renderChart() {
   if (!chartCanvas.value || !stats.value || !stats.value.perEdition.length) return;
   // Newest-first from the API → reverse so the chart reads chronologically
@@ -140,6 +145,9 @@ function renderChart() {
   const accentHover = token('--color-accent-hover', '#388e3c');
   const textColor = token('--color-text-muted', '#aaaaaa');
   const gridColor = token('--color-border-subtle', '#2a2a2a');
+  const panelBg = token('--color-bg-elevated', '#111111');
+  const brightText = token('--color-text-bright', '#ffffff');
+  const bodyText = token('--color-text', '#e0e0e0');
 
   chart = new Chart(chartCanvas.value, {
     type: 'line',
@@ -155,7 +163,7 @@ function renderChart() {
           borderColor: accent,
           borderWidth: 2,
           // Subtle translucent fill under the line, derived from the accent.
-          backgroundColor: 'rgba(46, 125, 50, 0.12)',
+          backgroundColor: withAlpha(accent, 0.12),
           fill: true,
           pointRadius: 4,
           pointBackgroundColor: accent,
@@ -172,9 +180,9 @@ function renderChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#111',
-          titleColor: '#fff',
-          bodyColor: '#e0e0e0',
+          backgroundColor: panelBg,
+          titleColor: brightText,
+          bodyColor: bodyText,
           borderColor: gridColor,
           borderWidth: 1,
           callbacks: {
@@ -281,7 +289,7 @@ onBeforeUnmount(() => {
         >
           <div
             v-if="heroImage"
-            class="latest-hero"
+            class="parallax-hero latest-hero"
             :style="{ backgroundImage: `url(${heroImage})` }"
             aria-hidden="true"
           ></div>
@@ -343,20 +351,28 @@ onBeforeUnmount(() => {
           @mousemove="handleActivitiesMove"
         >
           <div
-            class="activities-hero"
+            class="parallax-hero activities-hero"
             :style="{ backgroundImage: `url(${activeActivity.background})` }"
             aria-hidden="true"
           ></div>
-          <div class="activities-content">
+          <div
+            class="activities-content"
+            role="tabpanel"
+            id="activity-panel"
+            :aria-labelledby="`activity-tab-${activeActivity.kind}`"
+          >
             <h2 class="panel-title">Activities</h2>
-            <div class="activity-tabs" role="tablist" aria-label="Activities">
+            <div class="activity-tabs" role="tablist" aria-label="Activities" @keydown="onTabKeydown">
               <button
                 v-for="a in ACTIVITIES"
                 :key="a.kind"
+                :id="`activity-tab-${a.kind}`"
                 class="activity-tab"
                 role="tab"
                 :class="{ active: a.kind === activeActivityKind }"
                 :aria-selected="a.kind === activeActivityKind"
+                :aria-controls="'activity-panel'"
+                :tabindex="a.kind === activeActivityKind ? 0 : -1"
                 @click="activeActivityKind = a.kind"
               >{{ a.label }}</button>
             </div>
@@ -507,20 +523,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+/* Drift mechanics are .parallax-hero (base.css); this layer only adds the
+ * darkening treatment. */
 .latest-hero {
-  position: absolute;
-  inset: -6%;
-  background-size: cover;
-  background-position: center;
-  /* Slightly oversized (inset: -6%) so the few-px parallax shift never reveals
-   * an empty edge. --hero-x/--hero-y are set by handleLatestMove (mousemove). */
-  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
-  transition: transform 0.2s ease-out;
   /* Darken + desaturate so the foreground text and cards stay the focus,
    * regardless of how bright the source thumbnail is. */
   filter: brightness(0.28) saturate(0.85);
-  z-index: 0;
-  pointer-events: none;
 }
 
 /* With a hero image, lean on it for the card background and add a scrim so the
@@ -677,19 +685,10 @@ onBeforeUnmount(() => {
 }
 
 .activities-hero {
-  position: absolute;
-  /* Slightly oversized (inset: -6%) so the few-px parallax shift never
-   * reveals an empty edge; --act-x/--act-y are set by handleActivitiesMove
-   * (mousemove), same idea as the latest-edition card's hero. */
-  inset: -6%;
-  background-size: cover;
-  background-position: center;
-  transform: translate(var(--act-x, 0px), var(--act-y, 0px));
-  transition: transform 0.2s ease-out;
+  /* Drift mechanics are .parallax-hero (base.css); this layer only adds the
+   * quiet wash treatment. */
   opacity: 0.16;
   filter: saturate(0.85);
-  z-index: 0;
-  pointer-events: none;
 }
 
 .activities-content {
@@ -723,7 +722,7 @@ onBeforeUnmount(() => {
   padding: 8px 16px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .activity-tab:hover {
@@ -759,12 +758,12 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   color: var(--color-accent-text);
   font-size: 0.95rem;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .activity-cta:hover {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-bright);
 }
 
 </style>

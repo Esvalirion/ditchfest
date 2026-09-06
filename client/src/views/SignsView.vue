@@ -66,11 +66,15 @@ async function copySrc(src) {
 
 <template>
   <div class="accordion">
-    <p class="accordion-toggle" @click="accordionOpen = !accordionOpen">Click here for more information</p>
-    <div class="accordion-content" :class="{ open: accordionOpen }">
+    <button
+      class="accordion-toggle"
+      :aria-expanded="accordionOpen"
+      aria-controls="signs-help"
+      @click="accordionOpen = !accordionOpen"
+    >Click here for more information</button>
+    <div id="signs-help" class="accordion-content" :class="{ open: accordionOpen }">
       <p class="subtitle">Click on any image to copy its URL to clipboard</p>
-      <p class="subtitle">Кликните на любое изображение, чтобы скопировать его URL в буффер обмена</p>
-      <p class="subtitle">Если картинки не загружаются, то, скорее-всего, это вина dashmap.live</p>
+      <p class="subtitle">If images don't load, it is most likely dashmap.live being down</p>
     </div>
   </div>
 
@@ -117,12 +121,18 @@ async function copySrc(src) {
 </template>
 
 <style scoped>
+/* A real <button> so the toggle is keyboard-reachable; styled to read as the
+   same quiet inline link it always was. */
 .accordion-toggle {
-  margin: 10px 0;
-  text-align: center;
-  cursor: pointer;
+  display: block;
+  margin: 10px auto;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   color: var(--color-text-muted);
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .accordion-toggle:hover {
@@ -132,7 +142,6 @@ async function copySrc(src) {
 .accordion-content {
   display: none;
   overflow: hidden;
-  transition: max-height 0.3s ease;
 }
 
 .accordion-content.open {
@@ -156,23 +165,7 @@ async function copySrc(src) {
   margin-bottom: 20px;
 }
 
-.filter-btn {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 22px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border 0.15s;
-}
-
-.filter-btn:hover,
-.filter-btn.active {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-text-bright);
-}
+/* .filter-btn lives in base.css (shared with the Maps and Mappers pages). */
 
 /* Studio CTA is a RouterLink styled as a filter button, but with the accent
    border to signal it's a navigation to the builder, not a catalogue filter. */
@@ -185,7 +178,7 @@ async function copySrc(src) {
 }
 .studio-cta:hover {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-bright);
 }
 
 .gallery {
@@ -208,7 +201,7 @@ async function copySrc(src) {
   cursor: pointer;
   box-sizing: border-box;
   background-color: var(--color-overlay-1);
-  transition: background-color 0.2s;
+  transition: background-color var(--transition-medium);
 }
 
 .image-container:hover {
@@ -227,11 +220,11 @@ async function copySrc(src) {
   left: 50%;
   transform: translateX(-50%);
   background-color: var(--color-notification);
-  color: #fff;
+  color: var(--color-text-bright);
   padding: 15px;
   border-radius: var(--radius-sm);
-  transition: opacity 0.3s;
+  transition: opacity var(--transition-slow);
   pointer-events: none;
-  z-index: 20;
+  z-index: var(--z-toast);
 }
 </style>

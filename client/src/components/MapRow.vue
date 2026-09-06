@@ -17,6 +17,11 @@ const props = defineProps({
   map: { type: Object, required: true },
   subtitle: { type: String, default: '' },
   voted: { type: Boolean, required: true },
+  // Non-voting listings (Missing on TMX) hide the toggle entirely.
+  votable: { type: Boolean, default: true },
+  // 'hover' reveals the action cluster on hover (desktop default);
+  // 'always' keeps it visible — for pages where those actions ARE the point.
+  actionsVisibility: { type: String, default: 'hover' },
 });
 const emit = defineEmits(['voted']);
 
@@ -102,36 +107,42 @@ function onThumbError(e) {
       <div class="map-author">{{ subtitle }}</div>
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>
-    <div class="row-actions">
-      <a
-        class="icon-btn"
-        :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
-        target="_blank"
-        rel="noopener"
-        title="Download on trackmania.io"
-        aria-label="Download on trackmania.io"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
-        </svg>
-      </a>
-      <button
-        v-if="tmxId != null"
-        class="icon-btn"
-        :class="{ ok: copied }"
-        :title="copied ? 'Copied!' : `Copy TMX id (${tmxId})`"
-        :aria-label="copied ? 'TMX id copied' : 'Copy TMX id'"
-        @click="copyTmxId"
-      >
-        <svg v-if="!copied" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m4 12.5 5 5L20 6.5" />
-        </svg>
-      </button>
+    <div class="row-actions" :class="{ always: actionsVisibility === 'always' }">
+      <!-- Default cluster: download link + copy TMX id. Pages with their own
+           action set (Missing on TMX passes recheck + download) replace it
+           wholesale via the actions slot. -->
+      <slot name="actions">
+        <a
+          class="icon-btn"
+          :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
+          target="_blank"
+          rel="noopener"
+          title="Download on trackmania.io"
+          aria-label="Download on trackmania.io"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
+          </svg>
+        </a>
+        <button
+          v-if="tmxId != null"
+          class="icon-btn"
+          :class="{ ok: copied }"
+          :title="copied ? 'Copied!' : `Copy TMX id (${tmxId})`"
+          :aria-label="copied ? 'TMX id copied' : 'Copy TMX id'"
+          @click="copyTmxId"
+        >
+          <svg v-if="!copied" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m4 12.5 5 5L20 6.5" />
+          </svg>
+        </button>
+      </slot>
     </div>
     <button
+      v-if="votable"
       class="vote-btn vote-btn-sm"
       :class="{ voted }"
       :disabled="map._pending"
@@ -143,6 +154,9 @@ function onThumbError(e) {
 </template>
 
 <style scoped>
+/* .map-thumb / .map-name / .map-author / .icon-btn / .vote-btn live in
+   base.css — shared with the other card-row listings and detail pages. */
+
 .map-row {
   display: flex;
   align-items: center;
@@ -153,15 +167,6 @@ function onThumbError(e) {
 
 .map-row:last-child {
   border-bottom: none;
-}
-
-.map-thumb {
-  width: 64px;
-  height: 36px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: 3px;
-  background-color: var(--color-bg-elevated);
 }
 
 @media (hover: hover) {
@@ -175,34 +180,17 @@ function onThumbError(e) {
   min-width: 0;
 }
 
-.map-name {
-  color: inherit;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-decoration: none;
-}
-
-.map-name:hover {
-  text-decoration: underline;
-}
-
-.map-author {
-  color: var(--color-text-dim);
-  font-size: 0.8rem;
-}
-
-/* Hover actions: download (always) + copy TMX id (when the map is on TMX).
-   Hidden until the row is hovered on pointer devices, always visible on
-   touch (there is no hover to reveal them) and via keyboard (:focus-within). */
+/* Hover actions (the slot's default: download + copy TMX id). Hidden until
+   the row is hovered on pointer devices, always visible on touch (there is no
+   hover to reveal them), via keyboard (:focus-within), and whenever the
+   caller passes actions-visibility="always". */
 .row-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-fast);
 }
 
 @media (hover: hover) {
@@ -218,60 +206,8 @@ function onThumbError(e) {
   }
 }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: var(--color-bg);
-  color: var(--color-text-dim);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.icon-btn:hover {
-  color: var(--color-text-bright);
-  border-color: var(--color-text-bright);
-}
-
-.icon-btn.ok {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.icon-btn svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-.vote-btn {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 14px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border 0.15s, background 0.15s;
-}
-
-.vote-btn:hover {
-  border: 1px solid var(--color-text-bright);
-}
-
-.vote-btn.voted {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.vote-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+.row-actions.always {
+  opacity: 1;
 }
 
 .vote-btn-sm {

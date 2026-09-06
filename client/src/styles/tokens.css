@@ -36,12 +36,6 @@
   --color-danger: #e57373;
   --color-notification: #4caf50;
 
-  /* Roadmap badges */
-  --color-badge-short: #2e7d32;
-  --color-badge-mid: #1565c0;
-  --color-badge-long: #6a1b9a;
-  --color-badge-plan: #5d4037;
-
   /* Shadows */
   --shadow-card: 0 4px 15px rgba(0, 0, 0, 0.5);
   --shadow-popover: 0 8px 30px rgba(0, 0, 0, 0.7);
@@ -51,6 +45,22 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
+  /* Z-layers: nav < toast < tooltip < popover < topmost floating tip.
+     Components should layer via these, not invent new numbers. */
+  --z-nav: 10;
+  --z-toast: 20;
+  --z-tooltip: 50;
+  --z-popover: 100;
+  --z-topmost: 1000;
+
+  /* Transition durations: instant (hover popovers), fast (the site default),
+     medium (hero drift), slow (progress bar / toast fade). */
+  --transition-instant: 0.12s;
+  --transition-fast: 0.15s;
+  --transition-medium: 0.2s;
+  --transition-slow: 0.3s;
+
   /* Typography */
   --font-family-base: Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }

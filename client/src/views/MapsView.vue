@@ -165,23 +165,7 @@ load();
   max-width: 640px;
 }
 
-.filter-btn {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 22px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border 0.15s;
-}
-
-.filter-btn:hover,
-.filter-btn.active {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-text-bright);
-}
+/* .filter-btn lives in base.css (shared with the Signs and Mappers pages). */
 
 .show-more {
   display: block;
@@ -219,7 +203,7 @@ load();
   content: "▸";
   color: var(--color-text-dim);
   margin-right: 8px;
-  transition: transform 0.15s;
+  transition: transform var(--transition-fast);
   display: inline-block;
 }
 

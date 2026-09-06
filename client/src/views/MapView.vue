@@ -9,6 +9,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
+import { useParallax } from '../utils/parallax';
 import StyleTags from '../components/StyleTags.vue';
 
 const route = useRoute();
@@ -21,19 +22,7 @@ const votePending = ref(false);
 // The map card uses the thumbnail as a drifting parallax background, same idea
 // as the latest-edition panel on the home page. mapCard anchors the cursor math.
 const mapCard = ref(null);
-
-/** Parallax over the map card: the cursor position within the card nudges the
- *  background a few px. Scoped to this element; no-ops on touch devices (no
- *  mousemove fires there, the bg just stays static — consistent with home). */
-function handleCardMove(e) {
-  const el = mapCard.value;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
-  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
-  el.style.setProperty('--hero-x', `${x}px`);
-  el.style.setProperty('--hero-y', `${y}px`);
-}
+const handleCardMove = useParallax(() => mapCard.value);
 
 // Admin co-author editor state. coauthorDraft is a newline-separated list of
 // accountIds; seeded from map.coauthors on every load so the admin always
@@ -66,8 +55,7 @@ async function load(mapUid) {
     map.value = data;
     state.value = 'ready';
     document.title = 'Ditchfest ' + (data.name || 'Map');
-    // Seed the co-author editor from the current set (empty when none / when
-    // the server hasn't applied migration 008 yet).
+    // Seed the co-author editor from the current set (empty when none).
     coauthorDraft.value = (data.coauthors || []).map((c) => c.accountId).join('\n');
     coauthorMsg.value = '';
     coauthorErr.value = false;
@@ -99,9 +87,7 @@ async function saveCoauthors() {
     await load(map.value.mapUid);
   } catch (e) {
     coauthorErr.value = true;
-    if (e.status === 503) {
-      coauthorMsg.value = "This feature isn't enabled on the server yet.";
-    } else if (e.status === 401) {
+    if (e.status === 401) {
       session.sessionExpired();
       coauthorMsg.value = 'Session expired.';
     } else {
@@ -143,7 +129,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
         {{ state === 'not-found' ? 'No such map.' : 'Failed to load this map. Try again later.' }}
       </p>
       <p class="subtitle">
-        <RouterLink class="map-back" :to="{ name: 'maps' }">← Back to Maps</RouterLink>
+        <RouterLink class="back-link" :to="{ name: 'maps' }">← Back to Maps</RouterLink>
       </p>
     </template>
 
@@ -156,7 +142,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
       >
         <div
           v-if="map.thumbnailUrl"
-          class="map-card-hero"
+          class="parallax-hero"
           :style="{ backgroundImage: `url(${map.thumbnailUrl})` }"
           aria-hidden="true"
         ></div>
@@ -249,7 +235,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
       </table>
 
       <p class="subtitle">
-        <RouterLink class="map-back" :to="{ name: 'maps' }">← Back to Maps</RouterLink>
+        <RouterLink class="back-link" :to="{ name: 'maps' }">← Back to Maps</RouterLink>
       </p>
     </template>
   </div>
@@ -279,7 +265,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
  *
  * min-height must exceed the body's natural height to actually open up the
  * banner — otherwise the content already fills the card and the value is a
- * no-op. 440px comfortably clears the headline + tags + links block. The
+ * no-op. 680px comfortably clears the headline + tags + links block. The
  * admin co-author form adds more, but it sits below and just grows the card
  * past the min — which is fine, the banner simply gets taller. */
 .map-card.has-hero {
@@ -289,21 +275,9 @@ watch(() => route.params.mapUid, load, { immediate: true });
   background-color: var(--color-bg-elevated);
 }
 
-/* The thumbnail becomes a slowly drifting background. Slightly oversized
- * (inset: -6%) so the few-px parallax shift never reveals an empty edge.
- * --hero-x/--hero-y are set by handleCardMove (mousemove). No brightness
- * filter here: the scrim gradient below does the darkening toward the
- * bottom, where the text lives. */
-.map-card-hero {
-  position: absolute;
-  inset: -6%;
-  background-size: cover;
-  background-position: center;
-  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
-  transition: transform 0.2s ease-out;
-  z-index: 0;
-  pointer-events: none;
-}
+/* The hero backdrop is .parallax-hero (base.css) — shared drift treatment
+ * with the home/mapper cards. No brightness filter here: the scrim gradient
+ * below does the darkening toward the bottom, where the text lives. */
 
 /* Gradient scrim: darkened at BOTH ends (top and bottom) where the text
  * lives, lighter in the middle so the thumbnail still reads. The bottom stays
@@ -316,9 +290,9 @@ watch(() => route.params.mapUid, load, { immediate: true });
   inset: 0;
   background: linear-gradient(
     to bottom,
-    rgba(17, 17, 17, 0.7) 0%,
-    rgba(17, 17, 17, 0.35) 35%,
-    rgba(17, 17, 17, 0.55) 70%,
+    color-mix(in srgb, var(--color-bg-elevated) 70%, transparent) 0%,
+    color-mix(in srgb, var(--color-bg-elevated) 35%, transparent) 35%,
+    color-mix(in srgb, var(--color-bg-elevated) 55%, transparent) 70%,
     var(--color-bg-elevated) 100%
   );
   z-index: 0;
@@ -375,7 +349,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   max-width: 90%;
   padding: 12px 18px;
   border-radius: var(--radius-md);
-  background: rgba(17, 17, 17, 0.45);
+  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
 }
@@ -410,7 +384,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   color: var(--color-text-bright);
   font-size: 0.9rem;
   text-decoration: none;
-  transition: border 0.15s, background 0.15s;
+  transition: border var(--transition-fast), background var(--transition-fast);
 }
 
 .map-link-btn:hover {
@@ -461,30 +435,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   font-size: 0.9rem;
 }
 
-.vote-btn {
-  background: var(--color-bg);
-  color: var(--color-text-bright);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 8px 16px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: border 0.15s, background 0.15s;
-}
-
-.vote-btn:hover {
-  border: 1px solid var(--color-text-bright);
-}
-
-.vote-btn.voted {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.vote-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
+/* .vote-btn lives in base.css (shared with MapRow). */
 
 .map-leaderboard {
   width: 100%;
@@ -517,22 +468,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
 .lb-time {
   color: var(--color-text-dim);
   text-align: right;
-  font-family: monospace;
-}
-
-.ach-empty {
-  color: var(--color-text-dimmer);
-  font-size: 0.9rem;
-  margin: 16px 0;
-}
-
-.map-back {
-  color: var(--color-text-dim);
-  text-decoration: none;
-}
-
-.map-back:hover {
-  color: var(--color-text-bright);
+  font-family: var(--font-family-mono);
 }
 
 .map-card-coauthors-sep {
@@ -567,7 +503,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   color: var(--color-text-bright);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.85rem;
   resize: vertical;
 }
@@ -586,7 +522,7 @@ watch(() => route.params.mapUid, load, { immediate: true });
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   cursor: pointer;
-  transition: border 0.15s, background 0.15s;
+  transition: border var(--transition-fast), background var(--transition-fast);
 }
 
 .coauthors-admin-btn:hover:not(:disabled) {
@@ -605,6 +541,6 @@ watch(() => route.params.mapUid, load, { immediate: true });
 }
 
 .coauthors-admin-err {
-  color: var(--color-accent);
+  color: var(--color-danger);
 }
 </style>

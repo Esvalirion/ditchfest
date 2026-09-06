@@ -469,10 +469,10 @@ watch([showGradient, showDots, showBase], scheduleRender);
   color: var(--color-text-bright);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 8px 14px;
+  padding: 8px 16px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: border 0.15s;
+  transition: border var(--transition-fast);
 }
 .format-btn:hover,
 .format-btn.active {
@@ -503,7 +503,7 @@ watch([showGradient, showDots, showBase], scheduleRender);
 .format-dims {
   color: var(--color-text-faint);
   font-size: 0.8rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-family-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -541,7 +541,7 @@ watch([showGradient, showDots, showBase], scheduleRender);
 /* Checkerboard behind the canvas when the gradient layer is off — reads as
    "these areas are transparent" instead of solid black. */
 .studio-preview.transparent {
-  background-color: #1a1a1a;
+  background-color: var(--color-bg);
   background-image: repeating-conic-gradient(#242424 0% 25%, #141414 0% 50%);
   background-size: 24px 24px;
 }
@@ -598,13 +598,13 @@ watch([showGradient, showDots, showBase], scheduleRender);
   padding: 10px 12px;
   border: 1px dashed var(--color-border-dashed);
   border-radius: var(--radius-sm);
-  background-color: rgba(229, 115, 115, 0.08);
+  background-color: color-mix(in srgb, var(--color-danger) 8%, transparent);
   color: var(--color-text-muted);
   font-size: 0.85rem;
 }
 .studio-warn code {
   color: var(--color-danger);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-family-mono);
 }
 
 .studio-controls {
@@ -712,7 +712,7 @@ watch([showGradient, showDots, showBase], scheduleRender);
 .stop-hex {
   color: var(--color-text);
   font-size: 0.85rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-family-mono);
 }
 
 .studio-actions {
@@ -725,13 +725,13 @@ watch([showGradient, showDots, showBase], scheduleRender);
 
 .download-btn {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-bright);
   border: 1px solid var(--color-accent);
   border-radius: var(--radius-sm);
   padding: 12px 26px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background 0.15s, border 0.15s;
+  transition: background var(--transition-fast), border var(--transition-fast);
 }
 .download-btn:hover:not(:disabled) {
   background: var(--color-accent-hover);
@@ -826,7 +826,7 @@ watch([showGradient, showDots, showBase], scheduleRender);
   padding: 6px 12px;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: border 0.15s;
+  transition: border var(--transition-fast);
 }
 .overlay-toggle-btn:hover,
 .overlay-change-btn:hover {
@@ -923,10 +923,10 @@ watch([showGradient, showDots, showBase], scheduleRender);
   color: var(--color-text-bright);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 6px 14px;
-  font-size: 0.85rem;
+  padding: 8px 16px;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: border 0.15s;
+  transition: border var(--transition-fast);
 }
 .overlay-tab:hover,
 .overlay-tab.active {
@@ -954,7 +954,7 @@ watch([showGradient, showDots, showBase], scheduleRender);
   background: #000;
   cursor: pointer;
   overflow: hidden;
-  transition: border 0.12s;
+  transition: border var(--transition-instant);
 }
 .overlay-thumb img {
   width: 100%;

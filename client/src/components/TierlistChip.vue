@@ -165,7 +165,7 @@ function hideTip() {
 .chip-tip {
   position: fixed;
   transform: translate(-50%, 0);
-  z-index: 1000;
+  z-index: var(--z-topmost);
   width: max-content;
   max-width: 300px;
   display: flex;

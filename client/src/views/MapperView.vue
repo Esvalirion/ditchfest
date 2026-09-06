@@ -9,6 +9,7 @@ import { ref, computed, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { useSessionStore } from '../stores/session';
+import { useParallax } from '../utils/parallax';
 import AchievementGrid from '../components/AchievementGrid.vue';
 import MapRow from '../components/MapRow.vue';
 
@@ -23,22 +24,11 @@ const myVotes = ref(new Set());
 // parallax background — same idea as the latest-edition card on HomeView.
 // mapper.maps arrives already sorted (votes DESC), so [0] is the best one.
 const mapperCard = ref(null);
+const handleCardMove = useParallax(() => mapperCard.value);
 
 /** Best map's thumbnail URL when there is one — drives the card's moving
  *  background. Null (no background image) when the mapper has no maps. */
 const heroImage = computed(() => mapper.value?.maps?.[0]?.thumbnailUrl || null);
-
-/** Parallax over the header card: the cursor position within the card nudges
- *  the background a few px. Bound/unbound with the card's lifecycle. */
-function handleCardMove(e) {
-  const el = mapperCard.value;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width - 0.5) * 4; // up to 2px each way
-  const y = ((e.clientY - rect.top) / rect.height - 0.5) * 4;
-  el.style.setProperty('--hero-x', `${x}px`);
-  el.style.setProperty('--hero-y', `${y}px`);
-}
 
 // Linked accounts' nicknames, comma-joined — null when there are none, so the
 // template can skip the whole "(...)" span. alts comes from the API already
@@ -112,7 +102,7 @@ watch(() => route.params.id, load, { immediate: true });
         {{ state === 'not-found' ? 'No such Trackmania account.' : 'Failed to load this account. Try again later.' }}
       </p>
       <p class="subtitle">
-        <RouterLink class="mapper-back" :to="{ name: 'top-mappers' }">← Back to the Mappers top</RouterLink>
+        <RouterLink class="back-link" :to="{ name: 'top-mappers' }">← Back to the Mappers top</RouterLink>
       </p>
     </template>
 
@@ -125,7 +115,7 @@ watch(() => route.params.id, load, { immediate: true });
       >
         <div
           v-if="heroImage"
-          class="mapper-hero"
+          class="parallax-hero mapper-hero"
           :style="{ backgroundImage: `url(${heroImage})` }"
           aria-hidden="true"
         ></div>
@@ -180,7 +170,7 @@ watch(() => route.params.id, load, { immediate: true });
       </div>
 
       <p class="subtitle">
-        <RouterLink class="mapper-back" :to="{ name: 'top-mappers' }">← Back to the Mappers top</RouterLink>
+        <RouterLink class="back-link" :to="{ name: 'top-mappers' }">← Back to the Mappers top</RouterLink>
       </p>
     </template>
   </div>
@@ -204,20 +194,10 @@ watch(() => route.params.id, load, { immediate: true });
 }
 
 /* The best map's thumbnail becomes a slowly drifting background, same as the
- * latest-edition card on HomeView. Darkened + desaturated so the foreground
- * text and stats stay legible regardless of the source image. */
+ * latest-edition card on HomeView. Drift mechanics are .parallax-hero
+ * (base.css); this layer only adds the darkening treatment. */
 .mapper-hero {
-  position: absolute;
-  inset: -6%;
-  background-size: cover;
-  background-position: center;
-  /* Slightly oversized (inset: -6%) so the few-px parallax shift never reveals
-   * an empty edge. --hero-x/--hero-y are set by handleCardMove (mousemove). */
-  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
-  transition: transform 0.2s ease-out;
   filter: brightness(0.18) saturate(0.85);
-  z-index: 0;
-  pointer-events: none;
 }
 
 /* With a hero image, lean on it for the card background; without one, the
@@ -268,7 +248,7 @@ watch(() => route.params.id, load, { immediate: true });
 .mapper-id {
   margin-top: 20px;
   color: var(--color-text-faintest);
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
@@ -287,21 +267,6 @@ watch(() => route.params.id, load, { immediate: true });
   background-color: var(--color-overlay-1);
   margin-top: 16px;
   overflow: hidden;
-}
-
-.mapper-back {
-  color: var(--color-text-dim);
-  text-decoration: none;
-}
-
-.mapper-back:hover {
-  color: var(--color-text-bright);
-}
-
-.ach-empty {
-  color: var(--color-text-dimmer);
-  font-size: 0.9rem;
-  margin: 16px 0;
 }
 
 /* Shown only when you open your own account page. */

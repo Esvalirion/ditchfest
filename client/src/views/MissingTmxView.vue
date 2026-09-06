@@ -4,8 +4,8 @@
      under the Maps tab (meta.navGroup in the router). -->
 <script setup>
 import { onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
 import { api } from '../utils/api';
+import MapRow from '../components/MapRow.vue';
 
 const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
 const maps = ref([]);
@@ -27,6 +27,12 @@ async function load() {
 
 function tmioUrl(mapUid) {
   return `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`;
+}
+
+// "by Author · Edition" — MapRow's subtitle line.
+function subtitle(m) {
+  const by = `by ${m.authorName || 'Unknown mapper'}`;
+  return m.editionName ? `${by} · ${m.editionName}` : by;
 }
 
 // The per-row "refresh": ask TMX about this one map right now. Found → the
@@ -62,10 +68,6 @@ function recheckTitle(m) {
   return 'Recheck on TMX now';
 }
 
-function onThumbError(e) {
-  e.target.style.display = 'none';
-}
-
 onMounted(load);
 </script>
 
@@ -91,52 +93,49 @@ onMounted(load);
       </p>
 
       <div class="missing-list">
-        <div v-for="m in maps" :key="m.mapUid" class="missing-row">
-          <img
-            v-if="m.thumbnailUrl"
-            class="map-thumb"
-            :src="m.thumbnailUrl"
-            alt=""
-            loading="lazy"
-            @error="onThumbError"
-          />
-          <div class="map-info">
-            <RouterLink class="map-name" :to="{ name: 'map', params: { mapUid: m.mapUid } }">
-              {{ m.name }}
-            </RouterLink>
-            <div class="map-author">
-              by {{ m.authorName || 'Unknown mapper' }}<template v-if="m.editionName"> · {{ m.editionName }}</template>
-            </div>
-          </div>
-          <button
-            class="icon-btn recheck-btn"
-            :class="{
-              busy: m._recheck === 'pending',
-              ok: m._recheck === 'absent',
-              err: m._recheck === 'error',
-            }"
-            :title="recheckTitle(m)"
-            :aria-label="recheckTitle(m)"
-            :disabled="m._recheck === 'pending'"
-            @click="recheck(m)"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
-            </svg>
-          </button>
-          <a
-            class="icon-btn"
-            :href="tmioUrl(m.mapUid)"
-            target="_blank"
-            rel="noopener"
-            title="Download on trackmania.io"
-            aria-label="Download on trackmania.io"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
-            </svg>
-          </a>
-        </div>
+        <!-- Regular MapRows, but with the actions slot swapped: recheck +
+             download are this page's whole point, so they replace the default
+             hover cluster and stay always visible. No vote toggle here. -->
+        <MapRow
+          v-for="m in maps"
+          :key="m.mapUid"
+          :map="m"
+          :subtitle="subtitle(m)"
+          :voted="false"
+          :votable="false"
+          actions-visibility="always"
+        >
+          <template #actions>
+            <button
+              class="icon-btn recheck-btn"
+              :class="{
+                busy: m._recheck === 'pending',
+                ok: m._recheck === 'absent',
+                err: m._recheck === 'error',
+              }"
+              :title="recheckTitle(m)"
+              :aria-label="recheckTitle(m)"
+              :disabled="m._recheck === 'pending'"
+              @click="recheck(m)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+              </svg>
+            </button>
+            <a
+              class="icon-btn"
+              :href="tmioUrl(m.mapUid)"
+              target="_blank"
+              rel="noopener"
+              title="Download on trackmania.io"
+              aria-label="Download on trackmania.io"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
+              </svg>
+            </a>
+          </template>
+        </MapRow>
       </div>
     </template>
   </div>
@@ -144,7 +143,7 @@ onMounted(load);
 
 <style scoped>
 #missing-root {
-  max-width: 720px;
+  max-width: 820px;
   margin: 0 auto;
   padding: 0 12px;
 }
@@ -173,75 +172,7 @@ onMounted(load);
   overflow: hidden;
 }
 
-.missing-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--color-border-hairline);
-}
-
-.missing-row:last-child {
-  border-bottom: none;
-}
-
-.map-thumb {
-  width: 64px;
-  height: 36px;
-  flex-shrink: 0;
-  object-fit: cover;
-  border-radius: 3px;
-  background-color: var(--color-bg-elevated);
-}
-
-.map-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.map-name {
-  color: inherit;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-decoration: none;
-}
-
-.map-name:hover {
-  text-decoration: underline;
-}
-
-.map-author {
-  color: var(--color-text-dim);
-  font-size: 0.8rem;
-}
-
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  padding: 0;
-  background: var(--color-bg);
-  color: var(--color-text-dim);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.icon-btn:hover {
-  color: var(--color-text-bright);
-  border-color: var(--color-text-bright);
-}
-
-.icon-btn svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
+/* .icon-btn lives in base.css; only the recheck state machine is local. */
 
 /* Recheck states: spinner while in flight; a muted "ok" flash when TMX was
    asked and confirmed the map is still absent; danger tint on failure. */

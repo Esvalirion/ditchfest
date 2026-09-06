@@ -27,9 +27,9 @@ import { mapPreviewState } from '../utils/mapPreview';
   box-shadow: var(--shadow-popover);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s;
+  transition: opacity var(--transition-instant);
   pointer-events: none;
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .map-preview.visible {

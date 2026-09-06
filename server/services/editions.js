@@ -31,25 +31,9 @@ async function getEditions() {
   // readable names. Empty on a TMX outage → tags just stay blank, style still
   // shows.
   const tagTable = await getTagsTable(TMIO_USER_AGENT);
-  // The style columns (tmx_style/tmx_tags/tmx_styles_updated_at) are added by
-  // migration 007. If that migration hasn't been applied yet, the query below
-  // would error out on the missing columns and take the whole catalog with
-  // it — so we retry the same query without them and degrade to no style
-  // chips instead. Once 007 is applied everywhere this fallback is dead code.
-  let rows;
-  try {
-    rows = (await pool.query(editionsQuery(true))).rows;
-  } catch (e) {
-    if (isMissingColumnError(e)) {
-      rows = (await pool.query(editionsQuery(false))).rows;
-    } else {
-      throw e;
-    }
-  }
+  const rows = (await pool.query(editionsQuery())).rows;
   // Co-authors are attached in a second pass: one batched query for the whole
-  // catalog (getCoauthorsForMaps) instead of N per-map lookups. Empty for every
-  // map when migration 008 isn't applied yet — getCoauthorsForMaps degrades to
-  // an empty Map on the undefined_table error.
+  // catalog (getCoauthorsForMaps) instead of N per-map lookups.
   const allMapUids = rows.flatMap((e) => e.maps.map((m) => m.mapUid)).filter(Boolean);
   const coauthorsByMap = await getCoauthorsForMaps(allMapUids);
   return rows.map((e) => ({
@@ -61,24 +45,9 @@ async function getEditions() {
   }));
 }
 
-/** True for a Postgres "column … does not exist" error — the exact failure
- *  when migration 007 hasn't been applied but the code already references the
- *  style columns. SQLSTATE 42703 = undefined_column. */
-function isMissingColumnError(e) {
-  if (e && e.code === '42703') return true;
-  return /does not exist/i.test(String((e && e.message) || ''));
-}
-
-/** The editions query, with or without the TMX style columns. withStyles is
- *  the migration-007 path; the no-styles variant omits the three style fields
- *  from json_build_object and is otherwise identical (kept in one place so the
- *  two can't drift). */
-function editionsQuery(withStyles) {
-  const styleFields = withStyles
-    ? `'style', m.tmx_style,
-            'tagsRaw', m.tmx_tags,
-            'tmxCheckedAt', m.tmx_styles_updated_at,`
-    : '';
+/** The editions query, including the TMX style columns (tmx_style/tmx_tags/
+ *  tmx_styles_updated_at, migration 007). */
+function editionsQuery() {
   return `
     SELECT
       e.campaign_id,
@@ -94,7 +63,9 @@ function editionsQuery(withStyles) {
             'author', m.author_account_id,
             'authorName', m.author_name,
             'thumbnailUrl', m.thumbnail_url,
-            ${styleFields}
+            'style', m.tmx_style,
+            'tagsRaw', m.tmx_tags,
+            'tmxCheckedAt', m.tmx_styles_updated_at,
             'votes', (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
                         WHERE v.map_uid = m.map_uid)
           ) ORDER BY m.position ASC NULLS LAST, m.name ASC
@@ -123,7 +94,7 @@ function editionsQuery(withStyles) {
  *           NOT on TMX; true otherwise (on TMX, or not yet checked). The
  *           client shows a "Not on TMX" chip exactly in the confirmed-absent
  *           case, never for still-pending maps.
- *  - coauthors: accountId[] of admin-added co-authors (migration 008). The
+ *  - coauthors: accountId[] of admin-added co-authors (map_coauthors). The
  *           catalog only needs the ids — names are resolved live on the
  *           single-map page (routes/map.js). Identities are NOT resolved here;
  *           aggregates that count authors wrap these in canon() themselves. */

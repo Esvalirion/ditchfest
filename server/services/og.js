@@ -12,7 +12,6 @@
 // the same link will pick up updated data on its own.
 const { pool } = require('../db');
 const { canon } = require('./links');
-const { isCoauthorsMissing } = require('./coauthors');
 const { getEditions } = require('./editions');
 
 const SITE_NAME = 'Ditchfest Signs';
@@ -115,15 +114,15 @@ async function getMapperForOg(accountId) {
 /** The full mapper ranking, votes-desc/name-asc, same shape as
  *  services/mapperRanking but WITHOUT the TM API name resolution (we fill
  *  missing names lazily from the catalog only when that identity is the one
- *  being previewed). Mirrors migration-008 fallback handling. */
+ *  being previewed). */
 async function rankingRows() {
   const authorCanon = canon('a.account_id');
   const voterCanon = canon('v.account_id');
-  const base = (coauthorArm) => `
+  const { rows } = await pool.query(`
     WITH map_authors AS (
       SELECT map_uid, author_account_id AS account_id
         FROM maps WHERE author_account_id IS NOT NULL
-      ${coauthorArm}
+      UNION ALL SELECT map_uid, account_id FROM map_coauthors
     )
     SELECT ${authorCanon} AS account_id,
            MAX(CASE WHEN a.account_id = m.author_account_id THEN m.author_name END) AS name,
@@ -133,15 +132,8 @@ async function rankingRows() {
       LEFT JOIN maps m ON m.map_uid = a.map_uid
       LEFT JOIN votes v ON v.map_uid = a.map_uid
      GROUP BY 1
-     ORDER BY votes DESC, name ASC NULLS LAST`;
-  try {
-    return (await pool.query(base('UNION ALL SELECT map_uid, account_id FROM map_coauthors'))).rows;
-  } catch (e) {
-    if (isCoauthorsMissing(e)) {
-      return (await pool.query(base(''))).rows;
-    }
-    throw e;
-  }
+     ORDER BY votes DESC, name ASC NULLS LAST`);
+  return rows;
 }
 
 /** groupMembers() resolved inline — we only need the identity + alts for the
@@ -172,36 +164,22 @@ async function catalogName(accountId) {
 }
 
 /** Top-voted map's thumbnail across the identity's accounts (primary + alts),
- *  mirroring getMapperMaps' sort and co-author fallback. Null if mapless. */
+ *  primary-authored or co-authored. Null if mapless. */
 async function bestMapThumb(members) {
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
-  const select = (predicate) => `
-    SELECT m.thumbnail_url,
+  const { rows } = await pool.query(
+    `SELECT m.thumbnail_url,
            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
               WHERE v.map_uid = m.map_uid) AS votes
       FROM maps m
-     WHERE m.thumbnail_url IS NOT NULL AND (${predicate})
-     ORDER BY votes DESC, m.name ASC LIMIT 1`;
-  try {
-    const { rows } = await pool.query(
-      select(
-        `m.map_uid IN (SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
-                 UNION
-                 SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph}))`
-      ),
-      members
-    );
-    return rows[0]?.thumbnail_url || null;
-  } catch (e) {
-    if (isCoauthorsMissing(e)) {
-      const { rows } = await pool.query(
-        select(`m.author_account_id IN (${ph})`),
-        members
-      );
-      return rows[0]?.thumbnail_url || null;
-    }
-    throw e;
-  }
+     WHERE m.thumbnail_url IS NOT NULL
+       AND m.map_uid IN (SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
+                  UNION
+                  SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph}))
+     ORDER BY votes DESC, m.name ASC LIMIT 1`,
+    members
+  );
+  return rows[0]?.thumbnail_url || null;
 }
 
 /** Build the <head> injection: a block of OG + Twitter meta tags, plus a

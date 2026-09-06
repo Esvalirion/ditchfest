@@ -281,7 +281,7 @@ load();
 
 <style scoped>
 #onboarding-root {
-  max-width: 900px;
+  max-width: 820px;
   margin: 0 auto;
 }
 
@@ -344,7 +344,7 @@ load();
 .ob-bar-fill {
   height: 100%;
   background-color: var(--color-accent);
-  transition: width 0.3s ease;
+  transition: width var(--transition-slow) ease;
 }
 
 .ob-grid {
@@ -369,7 +369,7 @@ load();
   cursor: pointer;
   overflow: hidden;
   position: relative;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .ob-map:hover {
@@ -379,7 +379,7 @@ load();
 
 .ob-map.liked {
   border-color: var(--color-accent);
-  background-color: rgba(46, 125, 50, 0.15);
+  background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
 }
 
 .ob-map:disabled {

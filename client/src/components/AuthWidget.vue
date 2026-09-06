@@ -26,7 +26,7 @@ const session = useSessionStore();
   display: flex;
   align-items: center;
   gap: 12px;
-  z-index: 10;
+  z-index: var(--z-nav);
 }
 
 .auth-user {
@@ -38,7 +38,7 @@ const session = useSessionStore();
   white-space: nowrap;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.15s;
+  transition: border-color var(--transition-fast);
 }
 
 .auth-user:hover {

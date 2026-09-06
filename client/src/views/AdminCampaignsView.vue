@@ -529,7 +529,7 @@ load();
   border-radius: var(--radius-sm);
   color: var(--color-text-dim);
   font-size: 0.7rem;
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   text-align: center;
   -moz-appearance: textfield;
 }
@@ -631,7 +631,7 @@ load();
 
 .campaign-id {
   color: var(--color-text-dimmer);
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.75rem;
   flex: 1;
 }

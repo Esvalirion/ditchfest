@@ -133,8 +133,12 @@ load();
 </template>
 
 <style scoped>
+/* .admin-card / .admin-label / .admin-input / .admin-msg / .admin-err /
+   .admin-info / .admin-name / .admin-id / .admin-remove live in base.css
+   (shared with AdminLinksView). Only this page's layout bits are local. */
+
 .admin-nav-link {
-  max-width: 560px;
+  max-width: 640px;
   margin: 0 auto 16px auto;
   display: flex;
   flex-direction: column;
@@ -147,56 +151,19 @@ load();
   font-size: 0.9rem;
 }
 
-.admin-card {
-  max-width: 560px;
-  margin: 0 auto 24px auto;
-  padding: 24px;
-  background-color: var(--color-overlay-2);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-lg);
-}
-
-.admin-label {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 8px;
-}
-
 .admin-add {
   display: flex;
   gap: 8px;
 }
 
+/* Stretch inside the .admin-add flex row (the base class is width-agnostic). */
 .admin-input {
   flex: 1;
   min-width: 0;
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  font-size: 0.9rem;
-}
-
-.admin-input:focus {
-  outline: none;
-  border-color: var(--color-text-bright);
-}
-
-.admin-msg {
-  margin-top: 10px;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  min-height: 1em;
-}
-
-.admin-err {
-  color: var(--color-danger);
 }
 
 .admin-list {
-  max-width: 560px;
+  max-width: 640px;
   margin: 0 auto;
 }
 
@@ -210,31 +177,5 @@ load();
   border-radius: var(--radius-md);
   margin-bottom: 8px;
   background-color: var(--color-overlay-1);
-}
-
-.admin-info {
-  min-width: 0;
-}
-
-.admin-name {
-  color: var(--color-text);
-}
-
-.admin-id {
-  color: var(--color-text-dimmer);
-  font-family: monospace;
-  font-size: 0.8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.admin-remove {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  font-size: 0.85rem;
-}
-
-.admin-remove:hover {
-  border-color: var(--color-danger);
 }
 </style>

@@ -17,7 +17,6 @@ const routes = [
   { path: '/maps', name: 'maps', component: () => import('../views/MapsView.vue') },
   { path: '/top-players', name: 'top-players', component: () => import('../views/TopPlayersView.vue') },
   { path: '/top-mappers', name: 'top-mappers', component: () => import('../views/TopMappersView.vue') },
-  { path: '/roadmap', name: 'roadmap', component: () => import('../views/RoadmapView.vue') },
   {
     path: '/mapper/:id',
     name: 'mapper',

@@ -413,7 +413,7 @@ onMounted(async () => {
   padding: 6px 14px;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .reset-btn:hover {

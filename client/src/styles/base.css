@@ -35,7 +35,7 @@ body::before {
   background-size: cover;
   z-index: -1;
   transform: scale(1.25) translate(var(--bg-x, 0), var(--bg-y, 0));
-  transition: transform 0.1s ease-out;
+  transition: transform var(--transition-fast) ease-out;
   pointer-events: none;
 }
 
@@ -67,7 +67,7 @@ body::before {
   padding: 8px 18px;
   font-size: 0.95rem;
   cursor: pointer;
-  transition: border 0.15s;
+  transition: border var(--transition-fast);
 }
 
 .auth-btn:hover {
@@ -77,4 +77,241 @@ body::before {
 a.auth-btn {
   display: inline-block;
   text-decoration: none;
+}
+
+/* Keyboard focus ring for every control; text fields keep their own
+   :focus border treatment instead (see the component inputs). */
+:focus-visible {
+  outline: 2px solid var(--color-text-bright);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* --- Shared buttons ------------------------------------------------------ */
+/* .filter-btn: catalogue tab/filter toggle (Signs, Maps, Mappers).
+   Two canonical tab-button sizes exist site-wide: this one (10px 22px,
+   1rem — top-level catalogue filters) and the compact variant (8px 16px,
+   0.9rem — nested toolbars: the studio format bar and overlay tabs, the home
+   activities strip). Don't invent a third. */
+.filter-btn {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 22px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border var(--transition-fast);
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-text-bright);
+}
+
+a.filter-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* .icon-btn: small square icon action (download link, copy, recheck). */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.icon-btn:hover {
+  color: var(--color-text-bright);
+  border-color: var(--color-text-bright);
+}
+
+.icon-btn.ok {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* .vote-btn: the like/vote toggle (MapRow, MapView). */
+.vote-btn {
+  background: var(--color-bg);
+  color: var(--color-text-bright);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border var(--transition-fast), background var(--transition-fast);
+}
+
+.vote-btn:hover {
+  border: 1px solid var(--color-text-bright);
+}
+
+.vote-btn.voted {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.vote-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Shared text bits ---------------------------------------------------- */
+/* Empty-list note under a section heading (achievements, maps, leaderboard). */
+.ach-empty {
+  color: var(--color-text-dimmer);
+  font-size: 0.9rem;
+  margin: 16px 0;
+}
+
+/* Quiet "← Back to …" link at the bottom of a detail page. */
+.back-link {
+  color: var(--color-text-dim);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--color-text-bright);
+}
+
+/* --- Shared card-row pieces ---------------------------------------------- */
+/* Map thumbnail + name + author line, shared by MapRow and the Missing-on-TMX
+   list (which renders MapRow, but the classes predate that reuse). */
+.map-thumb {
+  width: 64px;
+  height: 36px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 3px;
+  background-color: var(--color-bg-elevated);
+}
+
+.map-name {
+  color: inherit;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.map-name:hover {
+  text-decoration: underline;
+}
+
+.map-author {
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+}
+
+/* --- Shared parallax hero background -------------------------------------- */
+/* The drifting thumbnail backdrop of the big cards (home latest edition,
+ * activities, map page, mapper page). Slightly oversized (inset: -6%) so the
+ * few-px parallax shift never reveals an empty edge; --hero-x/--hero-y are
+ * set by useParallax() (utils/parallax.js) on mousemove. Component classes
+ * layered on top only add their filter/opacity treatment. */
+.parallax-hero {
+  position: absolute;
+  inset: -6%;
+  background-size: cover;
+  background-position: center;
+  transform: translate(var(--hero-x, 0px), var(--hero-y, 0px));
+  transition: transform var(--transition-medium) ease-out;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* --- Shared admin form pieces ---------------------------------------------- */
+/* Card + label + input + message + row fragments common to the admin pages
+   (AdminView, AdminLinksView). Layout-only differences (input stretch,
+   row padding) stay in the components' scoped styles. */
+.admin-card {
+  max-width: 640px;
+  margin: 0 auto 24px auto;
+  padding: 24px;
+  background-color: var(--color-overlay-2);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.admin-label {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.admin-input {
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+
+.admin-input:focus {
+  outline: none;
+  border-color: var(--color-text-bright);
+}
+
+.admin-msg {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 1em;
+}
+
+.admin-err {
+  color: var(--color-danger);
+}
+
+.admin-info {
+  min-width: 0;
+}
+
+.admin-name {
+  color: var(--color-text);
+}
+
+.admin-id {
+  color: var(--color-text-dimmer);
+  font-family: var(--font-family-mono);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-remove {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.admin-remove:hover {
+  border-color: var(--color-danger);
 }

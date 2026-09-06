@@ -44,6 +44,7 @@ psql -d postgres -f server/db/002_schema.sql
 psql -d postgres -f server/db/003_campaign_overrides.sql
 psql -d postgres -f server/db/004_campaign_folders.sql
 psql -d postgres -f server/db/005_campaign_sort_order.sql
+psql -d postgres -f server/db/006_campaign_sort_order_float.sql
 psql -d postgres -f server/db/007_map_styles.sql
 psql -d postgres -f server/db/008_map_coauthors.sql
 
@@ -83,6 +84,10 @@ trackmania.io. Ручной триггер — `POST /api/sync` с заголо�
 ## Контрибьютить
 
 - Взять страницу/фичу, поднять `client/`+`server/` локально, открыть PR.
+- Стили: сначала дизайн-токены (`client/src/styles/tokens.css` — цвета,
+  z-слои, тайминги), затем общие классы (`client/src/styles/base.css`), и
+  только потом `<style scoped>` компонента — подробности в
+  [CLAUDE.md](CLAUDE.md).
 - Бэкенд намеренно сверен с реальным контрактом API — не менять формы
   ответов без крайней необходимости, старый фронтенд (если где-то ещё жив)
   на это рассчитывает.
