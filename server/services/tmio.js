@@ -88,4 +88,48 @@ async function fetchMapLeaderboard(mapUid, userAgent, length = 5) {
   }));
 }
 
-module.exports = { sleep, fetchFolderCampaigns, fetchCampaignMaps, stripFormat, fetchMapLeaderboard };
+/** Map info for the records sweep: just the four Nadeo medal times (ms).
+ *  Note the endpoint is /api/map/{uid} (singular) — /api/maps/{uid} is a
+ *  different (gated) route that answers with the SPA HTML. Nulls mean the
+ *  map simply has no medal times (unranked etc.) — still a valid result. */
+async function fetchMapMedalTimes(mapUid, userAgent) {
+  const data = await get(`/api/map/${mapUid}`, userAgent);
+  return {
+    author: data.authorScore ?? null,
+    gold: data.goldScore ?? null,
+    silver: data.silverScore ?? null,
+    bronze: data.bronzeScore ?? null,
+  };
+}
+
+/** One leaderboard page for the records sweep: `length` entries starting at
+ *  `offset`, plus the map's total finisher count (so the caller can walk
+ *  every page — popular maps have 500+ finishers, a single top window would
+ *  silently undercount their medals). `locked` is true on competition maps;
+ *  their tops come back empty, which the caller treats as "no records". */
+async function fetchLeaderboardPage(mapUid, userAgent, offset, length) {
+  const data = await get(
+    `/api/leaderboard/map/${mapUid}?offset=${offset}&length=${length}`,
+    userAgent
+  );
+  return {
+    total: typeof data.playercount === 'number' ? data.playercount : (data.tops || []).length,
+    tops: (data.tops || []).map((t) => ({
+      position: t.position,
+      time: t.time,
+      accountId: t.player && t.player.id,
+      name: t.player && stripFormat(t.player.name),
+    })),
+  };
+}
+
+module.exports = {
+  sleep,
+  fetchFolderCampaigns,
+  fetchCampaignMaps,
+  stripFormat,
+  fetchMapLeaderboard,
+  fetchMapMedalTimes,
+  fetchLeaderboardPage,
+};
+

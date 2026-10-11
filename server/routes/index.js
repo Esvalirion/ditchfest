@@ -10,6 +10,7 @@ router.use('/api', require('./map'));
 router.use('/api', require('./missing'));
 router.use('/api', require('./mapper'));
 router.use('/api', require('./mappers'));
+router.use('/api', require('./players'));
 router.use('/api', require('./onboarding'));
 router.use('/api', require('./admins'));
 router.use('/api', require('./links'));

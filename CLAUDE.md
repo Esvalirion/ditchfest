@@ -80,6 +80,8 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 | `routes/missing.js`, `services/missingTmx.js` | публичный `GET /api/missing-tmx` — карты, подтверждённо отсутствующие на TMX (та же семантика, что `onTmx: false`); питает тихую страницу `/missing-tmx` |
 | `routes/mapper.js` | публичная страница аккаунта (`/api/mapper`), `/api/me` |
 | `routes/mappers.js` | топ мапперов |
+| `routes/players.js`, `services/playerStats.js` | вкладка Players — внутриигровые рекорды (`GET /api/results/players`) |
+| `services/records.js` | свип рекордов в каждом прогоне синка: медальные времена карт + топ-20 лидерборда (`db/backfillRecords.js` — разовый полный бэкфилл) |
 | `routes/onboarding.js` | пошаговое голосование новичка |
 | `routes/admins.js`, `links.js` | список админов, объединение аккаунтов |
 | `routes/sync.js` | ручной триггер синка каталога |
@@ -115,6 +117,9 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 - `TM_CLUB_ID=52818`, `TM_FOLDER_ID=829200` — клуб/папка Ditchfest на
   trackmania.io, реальные значения из оригинального `tm-votes`.
 - `SYNC_SECRET` — заголовок `X-Sync-Secret` для ручного `POST /api/sync`.
+- `TMIO_USER_AGENT` — User-Agent для trackmania.io. Обязательно описательный
+  («проект + контакт»): голый/дефолтный UA получает SPA-HTML вместо JSON
+  (грабля, см. раздел Players ниже).
 
 ## Объединение аккаунтов (`services/links.js`)
 
@@ -333,6 +338,53 @@ mappers → `scarymappers.jpg`, ditchfests → `cube.jpg`).
 двухшаговый (первый клик взводит кнопку на 3 сек), сбрасывает всё в пул.
 Онбординг-таб ведёт на реальный `/onboarding`. Маршруты активностей — не
 вкладки NavBar, `meta.navGroup` у них сознательно нет (как у `/onboarding`).
+
+## Вкладка Players: внутриигровые рекорды (миграция `009_player_records.sql`)
+
+Рекорды и медали игроков **на картах Ditchfest** — вкладка сознательно не про
+маппинг и не про ачивки сайта. Источник — тот же публичный trackmania.io, что
+и синк каталога: `GET /api/map/{uid}` — медальные времена (поля
+`authorScore`/`goldScore`/`silverScore`/`bronzeScore`; **эндпоинт
+сингулярный**, множественный `/api/maps/{uid}` отдаёт SPA-HTML) и
+`GET /api/leaderboard/map/{uid}?offset&length` — топ финишеров (имена игроков
+приходят прямо в ответе, `stripFormat()` их чистит). Данные:
+
+- медальные времена — колонки на `maps` (`author_time_ms`…, по образцу
+  tmx-стилей из 007: их пишет только свип рекордов, `upsertMap` не трогает);
+- `map_records` — лучшее время на (карта, игрок) из **полного лидерборда**
+  (свип ходит по страницам по 100 — на популярных картах 500+ финишеров,
+  окно топ-N молча недосчитало бы медали именно на них; `MAX_RECORDS_PER_MAP
+  = 1000` — страховочный кап от аномальных карт, не смысловой порог).
+  При каждом обновлении строки карты **заменяются целиком** (delete+insert
+  в одной транзакции) — вылетевший игрок не зависает со старым временем.
+  `position` — ранг на момент фетча, `records_playercount` — всего финишеров;
+- `player_names` — кеш ников (не accounts: только ник на момент финиша,
+  никакой identity/авторизации).
+
+Свип — `services/records.js`, крутится в каждом прогоне синка
+(`MAX_RECORD_MAPS_PER_RUN = 6`, от двух просьб API на карту и больше на
+популярных, непроверенные/старейшие первыми — новый дичфест закрывается
+первым же прогоном). Полный бэкфилл ~1900 карт — разово
+`node db/backfillRecords.js [limit]` (≈ час при ~2 req/s, безопасно
+прерывать/перезапускать, штампованные карты пропускаются). UI — контент-таб
+**Medals** (первый из будущих: записи/стили/…), внутри — шапки медальных
+колонок Author/Gold/Silver/Bronze сами являются сортировкой (дефолт Author),
+пассивная последняя колонка Finisher — просто число финишированных карт
+(считаются все места, полный лидерборд).
+
+**Деплой-локдаун:** код может уехать на прод РАНЬШЕ миграции 009 (её применяет
+человек вручную, возможно другой). `services/records.js`
+`isRecordsSchemaReady()` (кеш: позитив навсегда, негатив 60с) гейтит всё, что
+трогает схему рекордов: свип в синке молча скипается (одна строка в лог),
+`getPlayerRecords()` отдаёт `{pending: true}` (вкладка пишет «not live on
+this server yet»), `backfillRecords` отказывается с понятной ошибкой. Сайт
+без миграции работает целиком, кроме этой вкладки. Читалка — `services/playerStats.js`: медали считаются
+**полосами** (время ниже author = Author-медаль, не «плюс все младшие»),
+`canon()` склеивает линкованные аккаунты, знаменатель «проверено X из Y
+карт» — только карты со штампом `records_updated_at`, чтобы во время
+бэкфилла счётчик не врал. Заделы без дополнительных миграций: рейтинговые
+формулы (карты разной «солидности») и срезы по стилям TMX — стиль уже лежит
+на `maps.tmx_style`, срез делается join'ом на чтении.
 
 ## Sign Studio (`client/src/views/StudioView.vue`, `client/src/components/SignStudio.vue`, `client/src/utils/gradientRenderer.js`, `client/src/data/signStudioGradients.js`, `client/src/data/signStudioFormats.js`)
 
