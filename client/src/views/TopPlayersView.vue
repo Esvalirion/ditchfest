@@ -1,4 +1,4 @@
-<!-- Players tab: in-game medals on Ditchfest maps, tiered by Nadeo times.
+<!-- Players tab: in-game medals on Ditchfest maps, by map medal times.
      Structured as a tab strip ("Medals" now — records leaderboards etc. can
      join later). Data comes from the records sweep (server/services/
      records.js), which walks each map's FULL leaderboard — every finisher
@@ -98,7 +98,7 @@ onMounted(load);
 
     <template v-else>
       <p class="subtitle">
-        Medals on Ditchfest maps, tiered by Nadeo times. Click a column to rank by it.
+        Every medal farmed off a Ditchfest map, counted. Click a column to rank by it.
         <span v-if="tracks.checked < tracks.total" class="pl-coverage">
           (Syncing: {{ tracks.checked }} of {{ tracks.total }} maps checked so far.)
         </span>
