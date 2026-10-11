@@ -107,6 +107,19 @@ async function getStalestRecordMapUids(limit) {
   return rows.map((r) => r.map_uid);
 }
 
+/** map_uids that have never been checked at all — what the one-off backfill
+ *  walks. Re-refreshing stale-checked maps is the sync sweep's rotation,
+ *  not the backfill's job: a stalest-first loop here would never terminate
+ *  (measured — it happily re-walked the catalog ~4x until a network blip
+ *  tripped the failure breaker). */
+async function getNeverCheckedMapUids(limit) {
+  const { rows } = await pool.query(
+    'SELECT map_uid FROM maps WHERE records_updated_at IS NULL LIMIT $1',
+    [limit]
+  );
+  return rows.map((r) => r.map_uid);
+}
+
 /** Refresh a bounded batch — the hook the catalog sync calls every run.
  *  No-ops (one log line per run) until migration 009 is applied. */
 async function sweepRecords(limit, userAgent) {
@@ -128,8 +141,9 @@ async function sweepRecords(limit, userAgent) {
   return done;
 }
 
-/** One-off full backfill (db/backfillRecords.js): walk the whole catalog,
- *  never-checked first, throttled under trackmania.io's ~2 req/s. Returns
+/** One-off full backfill (db/backfillRecords.js): walk every never-checked
+ *  map, throttled under trackmania.io's ~2 req/s, and STOP when none are
+ *  left — staying fresh afterwards is the sync sweep's job. Returns
  *  { refreshed, failed, remaining } — safe to re-run, it resumes where it
  *  stopped (stamped maps are skipped). A 429 waits out the rate-limit window
  *  and retries the map once; five failures in a row abort the run (the
@@ -144,7 +158,7 @@ async function backfillRecords(userAgent, { limit } = {}) {
   const failedUids = new Set();
   outer: while (limit === undefined || refreshed + failed < limit) {
     // Pull extra candidates so persistently-failing maps can't starve the run.
-    const batch = (await getStalestRecordMapUids(failedUids.size + 10)).filter(
+    const batch = (await getNeverCheckedMapUids(failedUids.size + 10)).filter(
       (uid) => !failedUids.has(uid)
     );
     if (!batch.length) break;
