@@ -15,8 +15,9 @@ import { api } from '../utils/api';
 // point for future boards (records, styles, ...).
 const TABS = [{ key: 'medals', label: 'Medals' }];
 
-// Sortable columns — the medal tiers plus the raw finish count. Medal tiers
-// are bands, so author+gold+silver+bronze never double-count one finish.
+// Sortable columns — the medal tiers plus the raw finish count. Medals are
+// cumulative (Nadeo-style): beating a time earns that medal and every softer
+// one below it, so bronze <= silver <= gold <= author <= finishes.
 const MEDAL_COLUMNS = [
   { key: 'author', label: 'Author' },
   { key: 'gold', label: 'Gold' },
@@ -113,6 +114,7 @@ onMounted(load);
               :key="col.key"
               class="lb-num"
               :class="'lb-medal-' + col.key"
+              :title="'Time at or under the ' + col.key + ' time — also counts for every softer medal'"
               :aria-sort="sortKey === col.key ? 'descending' : 'none'"
             >
               <button

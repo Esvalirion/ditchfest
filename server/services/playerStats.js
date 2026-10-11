@@ -1,8 +1,8 @@
 // Aggregates for the Players tab: per-player in-game stats over the stored
-// top windows (services/records.js). Pure read side — medal tiers are bands
-// (a time under the author threshold counts as an Author medal, not also as
-// gold/silver/bronze), so the four columns sum to "finishes that beat at
-// least the bronze time", matching how people talk about medals.
+// leaderboards (services/records.js). Medals count cumulatively, the way
+// Nadeo awards them: a time under a threshold earns that medal AND every
+// softer one below it (author medalist also scores gold, silver and bronze).
+// So bronze <= silver <= gold <= author <= finishes always holds.
 //
 // canon() wraps account_id like everywhere else: if a leaderboard identity
 // happens to be linked to site accounts, their records pool into one person
@@ -27,12 +27,9 @@ async function getPlayerRecords() {
            MAX(pn.display_name) AS fallback_name,
            COUNT(*)::int AS finishes,
            COUNT(*) FILTER (WHERE m.author_time_ms IS NOT NULL AND r.time_ms <= m.author_time_ms)::int AS author,
-           COUNT(*) FILTER (WHERE m.gold_time_ms IS NOT NULL AND r.time_ms <= m.gold_time_ms
-                              AND (m.author_time_ms IS NULL OR r.time_ms > m.author_time_ms))::int AS gold,
-           COUNT(*) FILTER (WHERE m.silver_time_ms IS NOT NULL AND r.time_ms <= m.silver_time_ms
-                              AND (m.gold_time_ms IS NULL OR r.time_ms > m.gold_time_ms))::int AS silver,
-           COUNT(*) FILTER (WHERE m.bronze_time_ms IS NOT NULL AND r.time_ms <= m.bronze_time_ms
-                              AND (m.silver_time_ms IS NULL OR r.time_ms > m.silver_time_ms))::int AS bronze
+           COUNT(*) FILTER (WHERE m.gold_time_ms IS NOT NULL AND r.time_ms <= m.gold_time_ms)::int AS gold,
+           COUNT(*) FILTER (WHERE m.silver_time_ms IS NOT NULL AND r.time_ms <= m.silver_time_ms)::int AS silver,
+           COUNT(*) FILTER (WHERE m.bronze_time_ms IS NOT NULL AND r.time_ms <= m.bronze_time_ms)::int AS bronze
     FROM map_records r
     JOIN maps m ON m.map_uid = r.map_uid
     LEFT JOIN player_names pn ON pn.account_id = r.account_id
