@@ -47,6 +47,7 @@ psql -d postgres -f server/db/005_campaign_sort_order.sql
 psql -d postgres -f server/db/006_campaign_sort_order_float.sql
 psql -d postgres -f server/db/007_map_styles.sql
 psql -d postgres -f server/db/008_map_coauthors.sql
+psql -d postgres -f server/db/009_player_records.sql
 
 # Бэкенд
 cd server
