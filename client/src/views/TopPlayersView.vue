@@ -21,6 +21,7 @@ const TABS = [{ key: 'medals', label: 'Medals' }];
 // cumulative (Nadeo-style): beating a time earns that medal and every softer
 // one below it, so bronze <= silver <= gold <= author <= finishes.
 const MEDAL_COLUMNS = [
+  { key: 'wr', label: 'WR', title: 'World records — #1 on the map leaderboard' },
   { key: 'author', label: 'Author' },
   { key: 'gold', label: 'Gold' },
   { key: 'silver', label: 'Silver' },
@@ -176,7 +177,7 @@ onMounted(load);
               :key="col.key"
               class="lb-num"
               :class="'lb-medal-' + col.key"
-              :title="'Time at or under the ' + col.key + ' time — also counts for every softer medal'"
+              :title="col.title || 'Time at or under the ' + col.key + ' time — also counts for every softer medal'"
               :aria-sort="sortKey === col.key ? 'descending' : 'none'"
             >
               <button
@@ -220,7 +221,7 @@ onMounted(load);
             <td class="lb-num lb-finisher">{{ p.finishes }}</td>
           </tr>
           <tr v-if="!players.length">
-            <td colspan="7" class="pl-none">No players match “{{ search.trim() }}”.</td>
+            <td colspan="8" class="pl-none">No players match “{{ search.trim() }}”.</td>
           </tr>
         </tbody>
       </table>
@@ -387,6 +388,11 @@ onMounted(load);
 }
 
 .th-sort:hover {
+  color: var(--color-text-bright);
+}
+
+/* WR — the rarest column; bright, but not the Author accent. */
+td.lb-medal-wr {
   color: var(--color-text-bright);
 }
 

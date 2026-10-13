@@ -19,7 +19,7 @@ const { isRecordsSchemaReady } = require('./records');
 // request slices the cached list in JS. A minute of staleness is invisible:
 // the records sweep only lands new leaderboards every 5 minutes.
 const CACHE_TTL_MS = 60 * 1000;
-const SORT_KEYS = ['author', 'gold', 'silver', 'bronze', 'finishes'];
+const SORT_KEYS = ['wr', 'author', 'gold', 'silver', 'bronze', 'finishes'];
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 500;
 
@@ -89,7 +89,10 @@ async function queryPlayers() {
   // — then count finishes/medals per identity.
   const { rows } = await pool.query(`
     WITH best AS (
-      SELECT ${playerCanon} AS account_id, r.map_uid, MIN(r.time_ms) AS time_ms
+      SELECT ${playerCanon} AS account_id, r.map_uid, MIN(r.time_ms) AS time_ms,
+             -- position 1 = the map's world record (Nadeo's own rank, so
+             -- equal times are already tie-broken by who drove it first)
+             BOOL_OR(r.position = 1) AS wr
       FROM map_records r
       GROUP BY 1, 2
     ),
@@ -105,6 +108,7 @@ async function queryPlayers() {
            n.primary_name,
            n.fallback_name,
            COUNT(*)::int AS finishes,
+           COUNT(*) FILTER (WHERE b.wr)::int AS wr,
            COUNT(*) FILTER (WHERE m.author_time_ms IS NOT NULL AND b.time_ms <= m.author_time_ms)::int AS author,
            COUNT(*) FILTER (WHERE m.gold_time_ms IS NOT NULL AND b.time_ms <= m.gold_time_ms)::int AS gold,
            COUNT(*) FILTER (WHERE m.silver_time_ms IS NOT NULL AND b.time_ms <= m.silver_time_ms)::int AS silver,
@@ -119,6 +123,7 @@ async function queryPlayers() {
     accountId: r.account_id,
     name: r.primary_name || r.fallback_name || null,
     finishes: r.finishes,
+    wr: r.wr,
     author: r.author,
     gold: r.gold,
     silver: r.silver,
