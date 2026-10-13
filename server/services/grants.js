@@ -82,13 +82,15 @@ async function getSelfVoteCounts() {
   const authorCanon = canon('m.author_account_id');
   const voterCanon = canon('v.account_id');
   // A self-vote is voting on a map you're credited on — primary author OR
-  // co-author. UNION (not UNION ALL) dedups a map where you're both.
+  // co-author. UNION (not UNION ALL) dedups a map where you're both. The
+  // voter identity is computed INSIDE each arm: `v` isn't in scope out here,
+  // only `t` is.
   const { rows } = await pool.query(`
-    SELECT ${voterCanon} AS id, COUNT(DISTINCT map_uid)::int AS n FROM (
-       SELECT v.map_uid FROM votes v JOIN maps m ON m.map_uid = v.map_uid
+    SELECT id, COUNT(DISTINCT map_uid)::int AS n FROM (
+       SELECT ${voterCanon} AS id, v.map_uid FROM votes v JOIN maps m ON m.map_uid = v.map_uid
          WHERE ${authorCanon} = ${voterCanon}
        UNION
-       SELECT v.map_uid FROM votes v JOIN map_coauthors c ON c.map_uid = v.map_uid
+       SELECT ${voterCanon} AS id, v.map_uid FROM votes v JOIN map_coauthors c ON c.map_uid = v.map_uid
          WHERE ${canon('c.account_id')} = ${voterCanon}
      ) t GROUP BY 1`);
   return new Map(rows.map((r) => [r.id, r.n]));

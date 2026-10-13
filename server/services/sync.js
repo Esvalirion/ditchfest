@@ -21,7 +21,6 @@ const {
 const { lookupMapByUid } = require('./tmx');
 const { getAppToken, resolveDisplayNames } = require('./names');
 const { refreshEveryone } = require('./grants');
-const { sweepRecords } = require('./records');
 const { TM_CLUB_ID, TM_FOLDER_ID, TMIO_USER_AGENT } = require('../config');
 
 // Every run refreshes a bounded batch so we never burst through trackmania.io's
@@ -38,11 +37,6 @@ const REQUEST_DELAY_MS = 600; // ~1.6 req/s, under the ~2 req/s soft limit
 // marked checked, so a map only costs one request over its lifetime unless it
 // goes stale.
 const MAX_TMX_STYLES_PER_RUN = 12;
-// How many maps get their in-game records (medal times + full leaderboard)
-// refreshed per run, rotating oldest-first across the catalog — the Players
-// tab's data (services/records.js). At least two API calls per map, more on
-// popular maps (paged leaderboard).
-const MAX_RECORD_MAPS_PER_RUN = 6;
 
 async function syncCatalog() {
   const clubId = Number(TM_CLUB_ID);
@@ -172,25 +166,18 @@ async function syncCatalog() {
     console.error('sync: tmx style sweep failed', String(e));
   }
 
-  // Refresh in-game records (medal times + top leaderboard window) for a
-  // bounded batch, same rotation idea as the TMX sweep. Best-effort too: a
-  // trackmania.io hiccup skips maps (stamp untouched → retried next run).
-  let recordsRefreshed = 0;
-  try {
-    const done = await sweepRecords(MAX_RECORD_MAPS_PER_RUN, ua);
-    recordsRefreshed = done.length;
-  } catch (e) {
-    console.error('sync: records sweep failed', String(e));
-  }
-
   // Map counts and leaderboard places move with every sync, so re-check the
   // stat achievements for everyone. This is what catches "was in the top 10
   // at some point" for mappers whose page nobody happens to open.
+  // A failure lands in the run summary too (not just a separate log line), so
+  // a broken sweep shows up in every "catalog sync:" line instead of hiding.
   let achievementsGranted = 0;
+  let achievementsError = null;
   try {
     achievementsGranted = await refreshEveryone();
   } catch (e) {
-    console.error('sync: achievement sweep failed', String(e));
+    achievementsError = String(e);
+    console.error('sync: achievement sweep failed', achievementsError);
   }
   // How many editions still have no maps at all (initial backfill remaining).
   const syncedAfter = await getSyncedCampaignIds();
@@ -203,8 +190,8 @@ async function syncCatalog() {
     neverSynced,
     namesResolved,
     tmxStylesRefreshed,
-    recordsRefreshed,
     achievementsGranted,
+    ...(achievementsError ? { achievementsError } : {}),
     stoppedEarly,
   };
 }

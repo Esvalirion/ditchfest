@@ -50,7 +50,17 @@ async function refreshMapRecords(mapUid, userAgent) {
   await sleep(REQUEST_GAP_MS);
   const { total, tops: raw } = await fetchAllRecords(mapUid, userAgent);
 
-  const tops = raw.filter((t) => t.accountId && Number.isFinite(t.time));
+  // One row per player, best time wins. The board is walked page by page over
+  // several seconds, so a player who improves mid-walk can show up on two
+  // pages — and a duplicate key inside one INSERT ... ON CONFLICT DO UPDATE
+  // is a hard Postgres error ("cannot affect row a second time").
+  const byAccount = new Map();
+  for (const t of raw) {
+    if (!t.accountId || !Number.isFinite(t.time)) continue;
+    const prev = byAccount.get(t.accountId);
+    if (!prev || t.time < prev.time) byAccount.set(t.accountId, t);
+  }
+  const tops = [...byAccount.values()];
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -95,14 +105,30 @@ async function refreshMapRecords(mapUid, userAgent) {
   return { mapUid, medalTimes: medals, records: tops.length, total };
 }
 
-/** map_uids least-recently (or never) refreshed — never-checked maps come
- *  first, so a new ditchfest's records land within its first sweep. */
-async function getStalestRecordMapUids(limit) {
+// Hot set: maps of the newest few real campaigns. That's where nearly all new
+// finishes happen (old ditchfests barely get replayed), so they're refreshed
+// whenever they're older than HOT_STALE_MS; the rest of the catalog rotates
+// with whatever budget is left. A ditchfest bigger than 25 maps is split into
+// several Nadeo campaigns, hence 3 rather than 1.
+const HOT_CAMPAIGNS = 3;
+const HOT_STALE_MS = 60 * 60_000;
+
+/** Next batch for the sweep: never-checked maps first (a new ditchfest lands
+ *  on the first run), then stale hot maps, then the stalest of the rest. */
+async function getRecordSweepBatch(limit) {
   const { rows } = await pool.query(
-    `SELECT map_uid FROM maps
-     ORDER BY records_updated_at ASC NULLS FIRST
+    `WITH hot AS (
+       SELECT campaign_id FROM maps GROUP BY campaign_id
+       ORDER BY campaign_id DESC LIMIT $2
+     )
+     SELECT map_uid FROM maps
+     ORDER BY
+       (records_updated_at IS NULL) DESC,
+       (campaign_id IN (SELECT campaign_id FROM hot)
+          AND records_updated_at < now() - make_interval(secs => $3)) DESC,
+       records_updated_at ASC
      LIMIT $1`,
-    [limit]
+    [limit, HOT_CAMPAIGNS, HOT_STALE_MS / 1000]
   );
   return rows.map((r) => r.map_uid);
 }
@@ -120,17 +146,17 @@ async function getNeverCheckedMapUids(limit) {
   return rows.map((r) => r.map_uid);
 }
 
-/** Refresh a bounded batch — the hook the catalog sync calls every run.
+/** Refresh a bounded batch — run by its own cron in server.js (RECORDS_CRON).
  *  No-ops (one log line per run) until migration 009 is applied. */
 async function sweepRecords(limit, userAgent) {
   if (!(await isRecordsSchemaReady())) {
     console.warn('records: schema not ready (migration 009 applied?) — skipping sweep');
     return [];
   }
-  const uids = await getStalestRecordMapUids(limit);
+  const uids = await getRecordSweepBatch(limit);
   const done = [];
-  for (const mapUid of uids) {
-    if (done.length) await sleep(REQUEST_GAP_MS);
+  for (const [i, mapUid] of uids.entries()) {
+    if (i) await sleep(REQUEST_GAP_MS);
     try {
       done.push(await refreshMapRecords(mapUid, userAgent));
     } catch (e) {
@@ -243,7 +269,7 @@ module.exports = {
   MAX_RECORDS_PER_MAP,
   isRecordsSchemaReady,
   refreshMapRecords,
-  getStalestRecordMapUids,
+  getRecordSweepBatch,
   sweepRecords,
   backfillRecords,
 };

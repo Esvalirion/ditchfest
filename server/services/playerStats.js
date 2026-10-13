@@ -21,19 +21,35 @@ async function getPlayerRecords() {
     return { players: [], tracks: { total: 0, checked: 0 }, pending: true };
   }
   const playerCanon = canon('r.account_id');
+  // Two passes: first collapse to one best time per (identity, map) — a
+  // linked main + alt that both finished a map must count it once, not twice
+  // — then count finishes/medals per identity.
   const { rows } = await pool.query(`
-    SELECT ${playerCanon} AS account_id,
-           MAX(CASE WHEN r.account_id = ${playerCanon} THEN pn.display_name END) AS primary_name,
-           MAX(pn.display_name) AS fallback_name,
+    WITH best AS (
+      SELECT ${playerCanon} AS account_id, r.map_uid, MIN(r.time_ms) AS time_ms
+      FROM map_records r
+      GROUP BY 1, 2
+    ),
+    names AS (
+      SELECT ${playerCanon} AS account_id,
+             MAX(CASE WHEN r.account_id = ${playerCanon} THEN pn.display_name END) AS primary_name,
+             MAX(pn.display_name) AS fallback_name
+      FROM (SELECT DISTINCT account_id FROM map_records) r
+      LEFT JOIN player_names pn ON pn.account_id = r.account_id
+      GROUP BY 1
+    )
+    SELECT b.account_id,
+           n.primary_name,
+           n.fallback_name,
            COUNT(*)::int AS finishes,
-           COUNT(*) FILTER (WHERE m.author_time_ms IS NOT NULL AND r.time_ms <= m.author_time_ms)::int AS author,
-           COUNT(*) FILTER (WHERE m.gold_time_ms IS NOT NULL AND r.time_ms <= m.gold_time_ms)::int AS gold,
-           COUNT(*) FILTER (WHERE m.silver_time_ms IS NOT NULL AND r.time_ms <= m.silver_time_ms)::int AS silver,
-           COUNT(*) FILTER (WHERE m.bronze_time_ms IS NOT NULL AND r.time_ms <= m.bronze_time_ms)::int AS bronze
-    FROM map_records r
-    JOIN maps m ON m.map_uid = r.map_uid
-    LEFT JOIN player_names pn ON pn.account_id = r.account_id
-    GROUP BY 1
+           COUNT(*) FILTER (WHERE m.author_time_ms IS NOT NULL AND b.time_ms <= m.author_time_ms)::int AS author,
+           COUNT(*) FILTER (WHERE m.gold_time_ms IS NOT NULL AND b.time_ms <= m.gold_time_ms)::int AS gold,
+           COUNT(*) FILTER (WHERE m.silver_time_ms IS NOT NULL AND b.time_ms <= m.silver_time_ms)::int AS silver,
+           COUNT(*) FILTER (WHERE m.bronze_time_ms IS NOT NULL AND b.time_ms <= m.bronze_time_ms)::int AS bronze
+    FROM best b
+    JOIN maps m ON m.map_uid = b.map_uid
+    LEFT JOIN names n ON n.account_id = b.account_id
+    GROUP BY b.account_id, n.primary_name, n.fallback_name
   `);
 
   const players = rows
