@@ -1,19 +1,22 @@
-<!-- Ported from top-mappers.html + js/mappers.js. -->
+<!-- Ported from top-mappers.html + js/mappers.js. The three former sub-tabs
+     (Likes Received / Maps Made / Likes Given) are now ONE board styled like
+     the Players tab: every metric is its own column and the column headers
+     are the sort switches — no tab strip. -->
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '../utils/api';
 
-// Sort categories — default stays 'votes' (Rating). Adding an entry here plus
-// the matching field in the SQL is all it takes to grow a new category.
-// 'castVotes' ranks by votes cast (participation), not votes received — its
-// rows come straight from the votes table via FULL OUTER JOIN, so people who
-// never shipped a map appear too (with votes/maps = 0); the mapper-only tabs
-// below filter those back out to keep the old behaviour.
-const SORT_OPTIONS = [
-  { key: 'votes', label: 'Likes Received', metric: 'votes' },
-  { key: 'maps', label: 'Maps Made', metric: 'maps' },
-  { key: 'cast', label: 'Likes Given', metric: 'castVotes' },
+// Sortable columns — default stays 'votes' (Likes Received). Adding an entry
+// here plus the matching field in the SQL is all it takes to grow a new
+// category. 'castVotes' ranks by votes cast (participation), not votes
+// received — its rows come straight from the votes table via FULL OUTER
+// JOIN, so people who never shipped a map appear too (with votes/maps = 0);
+// on the authorship columns they simply sink to the bottom.
+const SORT_COLUMNS = [
+  { key: 'votes', label: 'Likes Received', title: 'Likes received across the mapper’s maps' },
+  { key: 'maps', label: 'Maps Made', title: 'Maps shipped — co-authored maps count too' },
+  { key: 'castVotes', label: 'Likes Given', title: 'Likes this account gave to other maps' },
 ];
 
 const router = useRouter();
@@ -22,25 +25,20 @@ const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
 const mappers = ref([]);
 const sortKey = ref('votes');
 
-const activeOption = computed(
-  () => SORT_OPTIONS.find((o) => o.key === sortKey.value) ?? SORT_OPTIONS[0],
-);
-
 // Backend returns the list ordered by votes; the client re-sorts locally when
-// the user picks another category. Rank is always the post-sort array index.
-// Mapper-only tabs ('votes'/'maps') hide rows without maps — the backend also
-// ships pure voters for the 'castVotes' tab, and they'd clutter those two.
+// the user picks another column. Rank is always the post-sort array index.
 const displayedMappers = computed(() => {
-  const opt = activeOption.value;
-  const metric = opt.metric;
-  const pool = metric === 'castVotes'
-    ? mappers.value
-    : mappers.value.filter((m) => m.maps > 0);
-  return [...pool].sort((a, b) => {
+  const metric = sortKey.value;
+  return [...mappers.value].sort((a, b) => {
     if (b[metric] !== a[metric]) return b[metric] - a[metric];
     return (a.name || '').localeCompare(b.name || '');
   });
 });
+
+function setSort(key) {
+  if (sortKey.value === key) return;
+  sortKey.value = key;
+}
 
 async function load() {
   state.value = 'loading';
@@ -71,22 +69,27 @@ onMounted(load);
     <p v-else-if="state === 'empty'" class="subtitle">No votes yet. Head to the Maps tab to get started.</p>
 
     <template v-else>
-      <div class="filter-buttons">
-        <button
-          v-for="opt in SORT_OPTIONS"
-          :key="opt.key"
-          class="filter-btn"
-          :class="{ active: sortKey === opt.key }"
-          @click="sortKey = opt.key"
-        >{{ opt.label }}</button>
-      </div>
+      <p class="subtitle">Every Ditchfest mapper and voter in one board. Click a column to rank by it.</p>
 
       <table class="leaderboard">
         <thead>
           <tr>
             <th class="lb-rank">#</th>
             <th>Mapper</th>
-            <th class="lb-votes">{{ activeOption.label }}</th>
+            <th
+              v-for="col in SORT_COLUMNS"
+              :key="col.key"
+              class="lb-num"
+              :class="'lb-' + col.key"
+              :title="col.title"
+              :aria-sort="sortKey === col.key ? 'descending' : 'none'"
+            >
+              <button
+                class="th-sort"
+                :class="{ active: sortKey === col.key }"
+                @click="setSort(col.key)"
+              >{{ col.label }}<span class="th-arrow">▾</span></button>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -102,7 +105,12 @@ onMounted(load);
                 {{ m.name || 'Unknown mapper' }}
               </RouterLink>
             </td>
-            <td class="lb-votes">{{ m[activeOption.metric] }}</td>
+            <td
+              v-for="col in SORT_COLUMNS"
+              :key="col.key"
+              class="lb-num"
+              :class="'lb-' + col.key"
+            >{{ m[col.key] }}</td>
           </tr>
         </tbody>
       </table>
@@ -111,17 +119,17 @@ onMounted(load);
 </template>
 
 <style scoped>
-.filter-buttons {
-  margin: 20px auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  padding: 0 10px;
+#mappers-root {
   max-width: 640px;
+  margin: 0 auto;
 }
 
-/* .filter-btn lives in base.css (shared with the Signs and Maps pages). */
+#mappers-root .subtitle {
+  text-align: center;
+  max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
 .leaderboard {
   max-width: 640px;
@@ -161,14 +169,61 @@ onMounted(load);
   color: var(--color-text-dim);
 }
 
-.lb-votes {
+.lb-num {
   text-align: right;
-  width: 80px;
   font-weight: bold;
+  font-variant-numeric: tabular-nums;
 }
 
-.leaderboard th.lb-votes {
+.leaderboard th.lb-num {
   text-align: right;
+}
+
+/* The numeric headers are the sort switches — a real button so keyboard
+   users get one too, styled as a plain header until active. The arrow is
+   absolutely positioned inside a reserved padding (same trick as the
+   Players tab: an inline arrow takes line-box width and wraps headers
+   onto a second line). */
+.th-sort {
+  position: relative;
+  margin: 0;
+  padding: 0 14px 0 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.th-sort .th-arrow {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 1;
+  visibility: hidden;
+}
+
+.th-sort.active {
+  color: var(--color-text-bright);
+}
+
+.th-sort.active .th-arrow {
+  visibility: visible;
+}
+
+.th-sort:hover {
+  color: var(--color-text-bright);
+}
+
+/* Likes Received is the headline metric — the only data column with an
+   accent, mirroring Author on the Players tab. The td prefix keeps this
+   above `.leaderboard td`'s plain color. */
+td.lb-votes {
+  color: var(--color-accent-text, var(--color-text-bright));
 }
 
 .lb-link {
@@ -184,5 +239,12 @@ onMounted(load);
 .lb-link:hover .lb-name {
   color: var(--color-text-bright);
   border-bottom-color: var(--color-text-faint);
+}
+
+/* Phones: keep the name and the two authorship columns, drop participation. */
+@media (max-width: 600px) {
+  .lb-castVotes {
+    display: none;
+  }
 }
 </style>

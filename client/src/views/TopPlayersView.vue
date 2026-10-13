@@ -1,9 +1,10 @@
 <!-- Players tab: in-game medals on Ditchfest maps, by map medal times.
-     Structured as a tab strip ("Medals" now — records leaderboards etc. can
-     join later). Data comes from the records sweep (server/services/
-     records.js), which walks each map's FULL leaderboard — every finisher
-     counts, whatever their place — so while the backfill is running the
-     board only covers already-checked maps (tracks.checked vs tracks.total).
+     One board, no content sub-tabs — the old single-tab "Medals" strip was
+     removed; bring a strip back when a second board (records, styles, …)
+     joins. Data comes from the records sweep (server/services/records.js),
+     which walks each map's FULL leaderboard — every finisher counts,
+     whatever their place — so while the backfill is running the board only
+     covers already-checked maps (tracks.checked vs tracks.total).
      All numeric column headers (medal tiers + Finisher) are the sort
      switches, default: Author. The board is ~18k players, so sort, name
      search and paging (PAGE_SIZE at a time, "Show more") all run on the
@@ -12,10 +13,6 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '../utils/api';
-
-// Content tabs of the Players page — one for now, the strip is the growth
-// point for future boards (records, styles, ...).
-const TABS = [{ key: 'medals', label: 'Medals' }];
 
 // Sortable columns — the medal tiers plus the raw finish count. Medals are
 // cumulative (Nadeo-style): beating a time earns that medal and every softer
@@ -38,7 +35,6 @@ const state = ref('loading'); // 'loading' | 'error' | 'pending' | 'empty' | 're
 const players = ref([]);
 const total = ref(0); // players matching the current search
 const tracks = ref({ total: 0, checked: 0 });
-const activeTab = ref('medals');
 // Always descending — nobody scrolls down a medal board to see the zeros.
 const sortKey = ref('author');
 const search = ref('');
@@ -127,18 +123,6 @@ onMounted(load);
 
 <template>
   <div id="players-root">
-    <h1 class="page-title">Players</h1>
-
-    <div class="filter-buttons">
-      <button
-        v-for="t in TABS"
-        :key="t.key"
-        class="filter-btn"
-        :class="{ active: activeTab === t.key }"
-        @click="activeTab = t.key"
-      >{{ t.label }}</button>
-    </div>
-
     <p v-if="state === 'loading'" class="subtitle">Loading…</p>
     <p v-else-if="state === 'error'" class="subtitle">Failed to load players. Try again later.</p>
     <p v-else-if="state === 'pending'" class="subtitle">
@@ -242,28 +226,12 @@ onMounted(load);
   margin: 0 auto;
 }
 
-#players-root .page-title {
-  text-align: center;
-  margin-top: 8px;
-}
-
 #players-root .subtitle {
   text-align: center;
   max-width: 620px;
   margin-left: auto;
   margin-right: auto;
 }
-
-.filter-buttons {
-  margin: 14px auto 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  padding: 0 10px;
-}
-
-/* .filter-btn lives in base.css (shared with the Signs, Maps and Mappers pages). */
 
 .pl-coverage {
   color: var(--color-text-dim);
@@ -396,13 +364,14 @@ td.lb-medal-wr {
   color: var(--color-text-bright);
 }
 
-/* Author is the headline medal — the only data column with an accent. */
-.lb-author {
+/* Author is the headline medal — the only data column with an accent. The
+   td prefix keeps this above `.leaderboard td`'s plain color (same as WR). */
+td.lb-author {
   color: var(--color-accent-text, var(--color-text-bright));
 }
 
 /* Finisher is context, not a ranking — visually quieter than the medals. */
-.lb-finisher {
+td.lb-finisher {
   color: var(--color-text-dim);
   font-weight: normal;
 }
