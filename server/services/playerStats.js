@@ -82,6 +82,32 @@ async function getPlayerRecords({ sort, q, offset, limit } = {}) {
   };
 }
 
+/** One identity's row on the board, for the account page: the medal/finish
+ *  counts plus their rank (rank of the default Author ordering — the tab's
+ *  headline metric). Null when this person has no finishes at all or the
+ *  records schema isn't live yet; the profile then just skips the block.
+ *  Shares the board cache with getPlayerRecords, so a warm tab makes this a
+ *  single array lookup. */
+async function getPlayerStats(accountId) {
+  if (!(await isRecordsSchemaReady())) return null;
+  const board = await getBoard();
+  const list = board.bySort.author;
+  const i = list.findIndex((p) => p.accountId === accountId);
+  if (i === -1) return null;
+  const p = list[i];
+  return {
+    rank: p.rank,
+    total: list.length,
+    wr: p.wr,
+    author: p.author,
+    gold: p.gold,
+    silver: p.silver,
+    bronze: p.bronze,
+    finishes: p.finishes,
+    tracks: board.tracks,
+  };
+}
+
 async function queryPlayers() {
   const playerCanon = canon('r.account_id');
   // Two passes: first collapse to one best time per (identity, map) — a
@@ -143,4 +169,4 @@ async function getTrackCounts() {
   return rows[0] || { total: 0, checked: 0 };
 }
 
-module.exports = { getPlayerRecords };
+module.exports = { getPlayerRecords, getPlayerStats };

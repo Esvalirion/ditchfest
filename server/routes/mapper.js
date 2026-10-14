@@ -6,6 +6,7 @@ const { refreshAccount } = require('../services/grants');
 const { groupMembers, groupAlts } = require('../services/links');
 const { lookupOne } = require('../services/names');
 const { getMapperResults } = require('../services/mapperRanking');
+const { getPlayerStats } = require('../services/playerStats');
 const { canon } = require('../services/links');
 
 const router = Router();
@@ -64,6 +65,17 @@ router.get('/mapper', optionalAuth, async (req, res) => {
 
   const maps = ranked ? await getMapperMaps(members) : [];
 
+  // In-game records (the Players tab board) for this same identity — null
+  // when they have no finishes or records aren't live here yet, and the
+  // profile page then hides the block. A records-side hiccup must not fail
+  // the whole page: log and carry on without the block.
+  let records = null;
+  try {
+    records = await getPlayerStats(accountId);
+  } catch (e) {
+    console.error('player stats lookup failed', String(e));
+  }
+
   // Bring the stat badges up to date before listing them.
   try {
     await refreshAccount(accountId, members, rank);
@@ -93,6 +105,7 @@ router.get('/mapper', optionalAuth, async (req, res) => {
     total: ranking.length,
     votes: ranked ? ranking[index].votes : 0,
     maps,
+    records,
     myVotes,
     achievements: describeAll(codes),
     // The frontend can check membership to decide whether this is your own

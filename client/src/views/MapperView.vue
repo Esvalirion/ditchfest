@@ -30,6 +30,15 @@ const handleCardMove = useParallax(() => mapperCard.value);
  *  background. Null (no background image) when the mapper has no maps. */
 const heroImage = computed(() => mapper.value?.maps?.[0]?.thumbnailUrl || null);
 
+// In-game records count only the maps the sweep has checked; while the
+// backfill is catching up the numbers understate. Same dim hint as the
+// Players tab, null once every map is checked.
+const recordsSyncNote = computed(() => {
+  const t = mapper.value?.records?.tracks;
+  if (!t || t.checked >= t.total) return null;
+  return `Syncing: ${t.checked} of ${t.total} maps checked so far.`;
+});
+
 // Linked accounts' nicknames, comma-joined — null when there are none, so the
 // template can skip the whole "(...)" span. alts comes from the API already
 // empty for an unlinked account.
@@ -140,6 +149,33 @@ watch(() => route.params.id, load, { immediate: true });
           </div>
         </div>
 
+        <!-- In-game records straight from the Players board — same identity,
+             same numbers. The API omits it for people without a single
+             finish (and while records aren't live on this server), so the
+             block never shows zeros-by-absence. -->
+        <div v-if="mapper.records" class="mapper-records">
+          <div class="mapper-records-label">In-game records</div>
+          <div class="mapper-stats">
+            <div class="mapper-stat">
+              <div class="mapper-stat-value">#{{ mapper.records.rank }}</div>
+              <div class="mapper-stat-label">of {{ mapper.records.total }} players</div>
+            </div>
+            <div class="mapper-stat">
+              <div class="mapper-stat-value">{{ mapper.records.wr }}</div>
+              <div class="mapper-stat-label">{{ mapper.records.wr === 1 ? 'world record' : 'world records' }}</div>
+            </div>
+            <div class="mapper-stat">
+              <div class="mapper-stat-value">{{ mapper.records.author }}</div>
+              <div class="mapper-stat-label">{{ mapper.records.author === 1 ? 'author medal' : 'author medals' }}</div>
+            </div>
+            <div class="mapper-stat">
+              <div class="mapper-stat-value">{{ mapper.records.finishes }}</div>
+              <div class="mapper-stat-label">{{ mapper.records.finishes === 1 ? 'finish' : 'finishes' }}</div>
+            </div>
+          </div>
+          <div v-if="recordsSyncNote" class="mapper-records-note">{{ recordsSyncNote }}</div>
+        </div>
+
         <div class="mapper-id">{{ mapper.accountId }}</div>
 
         <div v-if="isOwner(mapper.accountId)" class="mapper-owner">
@@ -243,6 +279,29 @@ watch(() => route.params.id, load, { immediate: true });
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* In-game records: a second stats row under the mapping one, set apart by a
+   small caption in the .mapper-you voice rather than a heavy divider. */
+.mapper-records {
+  margin-top: 26px;
+}
+
+.mapper-records-label {
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mapper-records .mapper-stats {
+  margin-top: 14px;
+}
+
+.mapper-records-note {
+  margin-top: 12px;
+  color: var(--color-text-faint);
+  font-size: 0.8rem;
 }
 
 .mapper-id {
