@@ -20,15 +20,41 @@ const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const mapper = ref(null);
 const myVotes = ref(new Set());
 
-// The header card uses the mapper's best (top-voted) map thumbnail as a
-// parallax background — same idea as the latest-edition card on HomeView.
-// mapper.maps arrives already sorted (votes DESC), so [0] is the best one.
+// The header card uses the mapper's best solo map thumbnail as a parallax
+// background — same idea as the latest-edition card on HomeView.
 const mapperCard = ref(null);
 const handleCardMove = useParallax(() => mapperCard.value);
 
-/** Best map's thumbnail URL when there is one — drives the card's moving
- *  background. Null (no background image) when the mapper has no maps. */
-const heroImage = computed(() => mapper.value?.maps?.[0]?.thumbnailUrl || null);
+/** Thumbnail of the mapper's best SOLO map — the card's moving background.
+ *  Solo first (no co-authors): collabs pull votes from several makers'
+ *  audiences at once, so without this filter the same few collabs would
+ *  dominate and most cards would share one background. Falls back to the
+ *  best collab when no solo map has a thumbnail, and to null — the account
+ *  gradient below — when there are no maps to show at all. mapper.maps
+ *  arrives already sorted (votes DESC), so the first match is the best one. */
+const heroImage = computed(() => {
+  const maps = mapper.value?.maps || [];
+  const best =
+    maps.find((m) => m.solo && m.thumbnailUrl) ||
+    maps.find((m) => m.thumbnailUrl);
+  return best?.thumbnailUrl || null;
+});
+
+// A map-less profile (a pure voter or player) still gets its own backdrop:
+// a muted gradient keyed to the account. An FNV-1a hash of the accountId
+// picks the hue pair — deterministic, so a player's card always looks like
+// theirs, and no two players share one. Saturation and lightness stay low
+// on purpose: a backdrop, not a statement.
+const heroGradient = computed(() => {
+  const id = mapper.value?.accountId || '';
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  const hue = Math.abs(h % 360);
+  return `linear-gradient(135deg, hsl(${hue} 30% 14%), hsl(${(hue + 40) % 360} 24% 8%))`;
+});
 
 // In-game records count only the maps the sweep has checked; while the
 // backfill is catching up the numbers understate. Same dim hint as the
@@ -120,6 +146,7 @@ watch(() => route.params.id, load, { immediate: true });
         ref="mapperCard"
         class="mapper-card"
         :class="{ 'has-hero': heroImage }"
+        :style="heroImage ? undefined : { backgroundImage: heroGradient }"
         @mousemove="handleCardMove"
       >
         <div
@@ -229,15 +256,16 @@ watch(() => route.params.id, load, { immediate: true });
   text-align: center;
 }
 
-/* The best map's thumbnail becomes a slowly drifting background, same as the
- * latest-edition card on HomeView. Drift mechanics are .parallax-hero
+/* The best solo map's thumbnail becomes a slowly drifting background, same as
+ * the latest-edition card on HomeView. Drift mechanics are .parallax-hero
  * (base.css); this layer only adds the darkening treatment. */
 .mapper-hero {
   filter: brightness(0.18) saturate(0.85);
 }
 
 /* With a hero image, lean on it for the card background; without one, the
- * default overlay background shows through as before. */
+ * account-keyed gradient takes over (bound inline — it's derived from the
+ * accountId, which CSS can't see), so this class only handles the image. */
 .mapper-card.has-hero {
   background-color: var(--color-bg-elevated);
 }

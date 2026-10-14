@@ -12,7 +12,10 @@ const { canon } = require('../services/links');
 const router = Router();
 
 /** Every map this identity is credited on (primary author OR co-author, across
- *  all linked accounts), most-voted first. */
+ *  all linked accounts), most-voted first. Each row carries a `solo` flag —
+ *  exactly one author after canon collapsing — which MapperView uses to pick
+ *  the card background: the best SOLO map, since a popular collab's thumbnail
+ *  would otherwise back every contributor's card at once. */
 async function getMapperMaps(members) {
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
   // CTE gathers this identity's map_uids from both author arms, then joins
@@ -23,12 +26,24 @@ async function getMapperMaps(members) {
        SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
        UNION
        SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph})
+     ),
+     map_authors AS (
+       SELECT map_uid, author_account_id AS account_id
+         FROM maps WHERE author_account_id IS NOT NULL
+       UNION ALL
+       SELECT map_uid, account_id FROM map_coauthors
+     ),
+     author_counts AS (
+       SELECT a.map_uid, COUNT(DISTINCT ${canon('a.account_id')}) AS authors
+         FROM map_authors a GROUP BY a.map_uid
      )
      SELECT m.map_uid, m.name, m.thumbnail_url, e.name AS edition_name,
+            COALESCE(c.authors, 0) = 1 AS solo,
             (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
                WHERE v.map_uid = m.map_uid) AS votes
       FROM maps m
       LEFT JOIN editions e ON e.campaign_id = m.campaign_id
+      LEFT JOIN author_counts c ON c.map_uid = m.map_uid
       WHERE m.map_uid IN (SELECT map_uid FROM my_maps)
       ORDER BY votes DESC, m.name ASC`,
     members
@@ -39,6 +54,7 @@ async function getMapperMaps(members) {
     editionName: r.edition_name,
     thumbnailUrl: r.thumbnail_url,
     votes: r.votes,
+    solo: r.solo,
   }));
 }
 

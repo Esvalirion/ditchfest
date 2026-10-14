@@ -66,7 +66,8 @@ async function getMapForOg(mapUid) {
 }
 
 /** A mapper's OG-relevant fields: name, rank, votes, map count, and the best
- *  map's thumbnail (same one MapperView uses as its hero background). Name
+ *  map's thumbnail, solo preferred (same chain MapperView uses for its hero
+ *  background). Name
  *  comes from the synced catalog/ranking; if it's null we don't chase the TM
  *  OAuth API for it (that's an external call a crawler preview shouldn't pay
  *  for) — the card falls back to a generic title. Returns null for unknown. */
@@ -163,20 +164,36 @@ async function catalogName(accountId) {
   return rows[0]?.author_name || null;
 }
 
-/** Top-voted map's thumbnail across the identity's accounts (primary + alts),
- *  primary-authored or co-authored. Null if mapless. */
+/** Thumbnail of the identity's best map, solo preferred: a solo map (exactly
+ *  one canon-resolved author) beats any collab, and among equals the most
+ *  voted wins — the same chain MapperView uses for its hero background, so
+ *  the crawler card can never disagree with the page. The page's last resort
+ *  (a per-account gradient) isn't something a crawler can render; there this
+ *  returns null and the default site card takes over. */
 async function bestMapThumb(members) {
   const ph = members.map((_, i) => `$${i + 1}`).join(', ');
   const { rows } = await pool.query(
-    `SELECT m.thumbnail_url,
+    `WITH map_authors AS (
+       SELECT map_uid, author_account_id AS account_id
+         FROM maps WHERE author_account_id IS NOT NULL
+       UNION ALL
+       SELECT map_uid, account_id FROM map_coauthors
+     ),
+     author_counts AS (
+       SELECT a.map_uid, COUNT(DISTINCT ${canon('a.account_id')}) AS authors
+         FROM map_authors a GROUP BY a.map_uid
+     )
+     SELECT m.thumbnail_url,
            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
               WHERE v.map_uid = m.map_uid) AS votes
       FROM maps m
+      LEFT JOIN author_counts c ON c.map_uid = m.map_uid
      WHERE m.thumbnail_url IS NOT NULL
        AND m.map_uid IN (SELECT map_uid FROM maps WHERE author_account_id IN (${ph})
                   UNION
                   SELECT map_uid FROM map_coauthors WHERE account_id IN (${ph}))
-     ORDER BY votes DESC, m.name ASC LIMIT 1`,
+     ORDER BY (COALESCE(c.authors, 0) = 1) DESC, votes DESC, m.name ASC
+     LIMIT 1`,
     members
   );
   return rows[0]?.thumbnail_url || null;
