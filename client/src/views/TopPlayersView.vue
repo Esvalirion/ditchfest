@@ -200,9 +200,12 @@ onMounted(load);
               v-for="col in MEDAL_COLUMNS"
               :key="col.key"
               class="lb-num"
-              :class="['lb-medal-' + col.key, { 'lb-author': col.key === 'author' }]"
+              :class="['lb-medal-' + col.key, { 'lb-active': sortKey === col.key }]"
             >{{ p[col.key] }}</td>
-            <td class="lb-num lb-finisher">{{ p.finishes }}</td>
+            <td
+              class="lb-num lb-finisher"
+              :class="{ 'lb-active': sortKey === FINISHER_COL.key }"
+            >{{ p.finishes }}</td>
           </tr>
           <tr v-if="!players.length">
             <td colspan="8" class="pl-none">No players match “{{ search.trim() }}”.</td>
@@ -347,33 +350,32 @@ onMounted(load);
   visibility: hidden;
 }
 
-.th-sort.active {
+.th-sort:hover {
   color: var(--color-text-bright);
+}
+
+/* Active comes after :hover on purpose — hovering the already-active
+   header must not wash out the accent that marks the sort. */
+.th-sort.active {
+  color: var(--color-accent-text, var(--color-text-bright));
 }
 
 .th-sort.active .th-arrow {
   visibility: visible;
 }
 
-.th-sort:hover {
-  color: var(--color-text-bright);
-}
-
-/* WR — the rarest column; bright, but not the Author accent. */
-td.lb-medal-wr {
-  color: var(--color-text-bright);
-}
-
-/* Author is the headline medal — the only data column with an accent. The
-   td prefix keeps this above `.leaderboard td`'s plain color (same as WR). */
-td.lb-author {
-  color: var(--color-accent-text, var(--color-text-bright));
-}
-
 /* Finisher is context, not a ranking — visually quieter than the medals. */
 td.lb-finisher {
   color: var(--color-text-dim);
   font-weight: normal;
+}
+
+/* The active sort's column is the ONLY one carrying the accent — color
+   answers "what am I ranked by right now", so it moves with the sort
+   instead of pinning to a fixed headline column. Must stay below
+   td.lb-finisher so sorting by Finisher recolors it too. */
+td.lb-active {
+  color: var(--color-accent-text, var(--color-text-bright));
 }
 
 .lb-link {

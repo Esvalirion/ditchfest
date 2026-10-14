@@ -109,7 +109,7 @@ onMounted(load);
               v-for="col in SORT_COLUMNS"
               :key="col.key"
               class="lb-num"
-              :class="'lb-' + col.key"
+              :class="['lb-' + col.key, { 'lb-active': sortKey === col.key }]"
             >{{ m[col.key] }}</td>
           </tr>
         </tbody>
@@ -207,22 +207,25 @@ onMounted(load);
   visibility: hidden;
 }
 
-.th-sort.active {
+.th-sort:hover {
   color: var(--color-text-bright);
+}
+
+/* Active comes after :hover on purpose — hovering the already-active
+   header must not wash out the accent that marks the sort. */
+.th-sort.active {
+  color: var(--color-accent-text, var(--color-text-bright));
 }
 
 .th-sort.active .th-arrow {
   visibility: visible;
 }
 
-.th-sort:hover {
-  color: var(--color-text-bright);
-}
-
-/* Likes Received is the headline metric — the only data column with an
-   accent, mirroring Author on the Players tab. The td prefix keeps this
-   above `.leaderboard td`'s plain color. */
-td.lb-votes {
+/* The active sort's column is the ONLY one carrying the accent (header
+   included) — color answers "what am I ranked by right now", so it moves
+   with the sort instead of pinning to a fixed headline column. Same
+   convention as the Players tab. */
+td.lb-active {
   color: var(--color-accent-text, var(--color-text-bright));
 }
 
