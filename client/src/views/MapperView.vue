@@ -152,9 +152,9 @@ watch(() => route.params.id, load, { immediate: true });
         <!-- In-game records straight from the Players board — same identity,
              same numbers. The API omits it for people without a single
              finish (and while records aren't live on this server), so the
-             block never shows zeros-by-absence. -->
+             block never shows zeros-by-absence. No caption: the stats rows
+             share one style and the gap separates them, like the Maps row. -->
         <div v-if="mapper.records" class="mapper-records">
-          <div class="mapper-records-label">In-game records</div>
           <div class="mapper-stats">
             <div class="mapper-stat">
               <div class="mapper-stat-value">#{{ mapper.records.rank }}</div>
@@ -281,21 +281,10 @@ watch(() => route.params.id, load, { immediate: true });
   letter-spacing: 0.05em;
 }
 
-/* In-game records: a second stats row under the mapping one, set apart by a
-   small caption in the .mapper-you voice rather than a heavy divider. */
+/* In-game records: a second stats row under the mapping one — no caption,
+   the same badge style with a wider gap does the separating. */
 .mapper-records {
-  margin-top: 26px;
-}
-
-.mapper-records-label {
-  color: var(--color-text-dim);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.mapper-records .mapper-stats {
-  margin-top: 14px;
+  margin-top: 32px;
 }
 
 .mapper-records-note {
