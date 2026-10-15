@@ -41,12 +41,14 @@ if ! grep -qE '^UMAMI_WEBSITE_ID=.+' .env; then
   U=http://127.0.0.1:3006
   ADMIN_PW=$(openssl rand -base64 18 | tr -d '/+=')
   json() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
-  TOKEN=$(curl -sf "$U/api/auth/login" -H 'Content-Type: application/json' \
-    -d '{"username":"admin","password":"umami"}' | json "['token']")
-  AUTH="Authorization: Bearer $TOKEN"
+  login() { curl -sf "$U/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"username\":\"admin\",\"password\":\"$1\"}" | json "['token']"; }
+  AUTH="Authorization: Bearer $(login umami)"
   curl -sf "$U/api/me/password" -H "$AUTH" -H 'Content-Type: application/json' \
     -d "{\"currentPassword\":\"umami\",\"newPassword\":\"$ADMIN_PW\"}" >/dev/null
   (umask 077; echo "admin / $ADMIN_PW" > /root/umami-admin.txt)
+  # Umami revokes the session on a password change — log in again.
+  AUTH="Authorization: Bearer $(login "$ADMIN_PW")"
   WID=$(curl -sf "$U/api/websites" -H "$AUTH" -H 'Content-Type: application/json' \
     -d '{"name":"Ditchfest","domain":"df.esvalirion.tech"}' | json "['id']")
   sed -i "s|^UMAMI_WEBSITE_ID=.*|UMAMI_WEBSITE_ID=$WID|" .env

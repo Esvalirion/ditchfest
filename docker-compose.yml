@@ -26,8 +26,9 @@ services:
       DATABASE_URL: ${UMAMI_DATABASE_URL}
       APP_SECRET: ${UMAMI_APP_SECRET}
       # Served as /stats/s.js — a neutral name instead of script.js /
-      # umami.js, which ad-block lists match on.
-      TRACKER_SCRIPT_NAME: s
+      # umami.js, which ad-block lists match on. v3 takes it as the literal
+      # path — "s" would serve /s, not /s.js.
+      TRACKER_SCRIPT_NAME: s.js
       DISABLE_TELEMETRY: 1
     ports:
       - "127.0.0.1:3006:3000"
