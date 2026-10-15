@@ -5,6 +5,7 @@
 import { ref, computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { SIGNS } from '../data/signs.js';
+import { track } from '../utils/analytics';
 
 const TOP_FILTERS = [
   { key: '1x4', label: '1x4' },
@@ -56,6 +57,7 @@ async function copySrc(src) {
     console.error('Failed to copy:', e);
     return;
   }
+  track('sign-copy');
   notificationVisible.value = true;
   clearTimeout(notifTimer);
   notifTimer = setTimeout(() => {

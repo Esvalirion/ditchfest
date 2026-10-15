@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { track } from '../utils/analytics';
 
 const TOKEN_KEY = 'tm_token';
 // Where to return after login: the backend always bounces back to the site
@@ -46,6 +47,7 @@ export const useSessionStore = defineStore('session', {
       } catch (e) {
         // Private mode / storage disabled — we just lose the return path.
       }
+      track('login', { from: window.location.pathname });
       window.location.href = '/auth/login';
     },
 

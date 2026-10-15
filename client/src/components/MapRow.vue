@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
 import { fetchTmxId } from '../utils/tmxId';
+import { track } from '../utils/analytics';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
 import StyleTags from './StyleTags.vue';
@@ -55,6 +56,7 @@ async function copyTmxId() {
       ta.remove();
     }
     copied.value = true;
+    track('copy-tmx-id');
     clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => (copied.value = false), 1500);
   } catch (e) {
@@ -72,6 +74,7 @@ async function toggleVote() {
   try {
     const data = await api('/api/vote', { body: { mapUid: props.map.mapUid, value } });
     props.map.votes = data.votes;
+    track('vote', { value: data.voted ? 'on' : 'off', source: 'list' });
     // The vote count just changed — next hover should show the fresh list.
     invalidateVoters(props.map.mapUid);
     emit('voted', data.voted);
@@ -119,6 +122,7 @@ function onThumbError(e) {
           rel="noopener"
           title="Download on trackmania.io"
           aria-label="Download on trackmania.io"
+          @click="track('map-download')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />

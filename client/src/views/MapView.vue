@@ -7,6 +7,7 @@
 import { ref, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
+import { track } from '../utils/analytics';
 import { useSessionStore } from '../stores/session';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
 import { useParallax } from '../utils/parallax';
@@ -109,6 +110,7 @@ async function toggleVote() {
     const data = await api('/api/vote', { body: { mapUid: map.value.mapUid, value } });
     map.value.votes = data.votes;
     map.value.voted = data.voted;
+    track('vote', { value: data.voted ? 'on' : 'off', source: 'map' });
     invalidateVoters(map.value.mapUid);
   } catch (e) {
     if (e.status === 401) session.sessionExpired();

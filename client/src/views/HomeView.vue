@@ -12,6 +12,7 @@ import {
   Filler,
 } from 'chart.js';
 import { api } from '../utils/api';
+import { track } from '../utils/analytics';
 import { useParallax } from '../utils/parallax';
 import { ACTIVITIES, DEFAULT_ACTIVITY_KIND, findActivity } from '../data/homeActivities';
 
@@ -377,7 +378,11 @@ onBeforeUnmount(() => {
               >{{ a.label }}</button>
             </div>
             <p class="activity-description">{{ activeActivity.description }}</p>
-            <RouterLink class="activity-cta" :to="{ name: activeActivity.routeName }">
+            <RouterLink
+              class="activity-cta"
+              :to="{ name: activeActivity.routeName }"
+              @click="track('activity-cta', { kind: activeActivity.kind })"
+            >
               {{ activeActivity.ctaLabel }} →
             </RouterLink>
           </div>

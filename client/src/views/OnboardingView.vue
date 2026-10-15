@@ -9,6 +9,7 @@
 import { ref, computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { api } from '../utils/api';
+import { track } from '../utils/analytics';
 import { useSessionStore } from '../stores/session';
 import AchievementCard from '../components/AchievementCard.vue';
 import StyleTags from '../components/StyleTags.vue';
@@ -98,6 +99,7 @@ async function toggleMap(map) {
 
   try {
     const data = await api('/api/vote', { body: { mapUid: map.mapUid, value } });
+    track('vote', { value: data.voted ? 'on' : 'off', source: 'onboarding' });
     if (data.voted) myVotes.value.add(map.mapUid);
     else myVotes.value.delete(map.mapUid);
     myVotes.value = new Set(myVotes.value);
@@ -142,6 +144,7 @@ async function goNext() {
     done.value = new Set(data.done || []);
     stepping.value = false;
     if (data.completed) {
+      track('onboarding-complete');
       unlockedAchievements.value = data.newAchievements;
       screen.value = 'finish';
       scrollUp();

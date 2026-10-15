@@ -95,6 +95,7 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 | `services/tmx.js` | поиск карты на Trackmania Exchange по `map_uid` + её стиль/теги (StyleName + раскрытие числовых ID тегов через кешируемую таблицу `/api/meta/tags`) — best-effort, не все карты там есть |
 | `services/names.js` | accountId → ник через TM OAuth (client credentials) |
 | `db.js` | `pg.Pool`, `DATABASE_URL` |
+| `services/analytics.js` | тег трекера Umami, вшивается в `index.html` при старте (`app.js`) |
 
 Правило: роут парсит запрос и формирует ответ, домен-специфичные SQL-запросы —
 в соответствующем `services/*.js`, доменные решения (что считается
@@ -522,6 +523,32 @@ label, default }] }] }`. UI (селектор стиля и color-picker'ы) г�
 (60мс) — частые движения color-picker'а не съедают кадр. Канвас в пикселях =
 экспорт 1:1, CSS `aspect-ratio` (инлайн из активного формата) масштабирует
 превью под ширину контейнера.
+
+## Аналитика (Umami, self-hosted)
+
+Свой Umami — контейнер `umami` в том же compose-проекте на VPS (своя
+`umami_db` в общем `tm-postgres`, `127.0.0.1:3006`). Первичная настройка —
+`scripts/umami-setup.sh` (идемпотентный: БД+роль, `.env`, контейнер, nginx);
+CI `docker-compose.yml` на VPS **не синкает**, при правке — `scp` руками.
+
+- Трекер отдаётся **same-origin**: nginx на сайтовых доменах проксирует в
+  Umami **ровно два адреса** — `/stats/s.js` (скрипт, переименован через
+  `TRACKER_SCRIPT_NAME` мимо адблок-списков) и `/stats/api/send` (сбор).
+  Не открывать весь `/stats/` — так наружу вылезет сам Umami с логином.
+  Работает на всех доменах-зеркалах без CORS. Дашборд — отдельный блок
+  `stats.esvalirion.tech`, пароль admin — `/root/umami-admin.txt` на VPS.
+- Тег вставляет сервер (`services/analytics.js`) в `index.html` при старте,
+  **только если задан `UMAMI_WEBSITE_ID`** — в клиентский билд ничего не
+  зашито, dev не репортит.
+- Просмотры страниц — без кода (трекер ловит `history.pushState` vue-router).
+  Кастомные события — `track(name, data)` из `client/src/utils/analytics.js`
+  (no-op без трекера). **Имя события не переименовывать** — в дашборде
+  история разъедется на два. Сейчас: `login`, `vote` (`value` on/off,
+  `source` list/map/onboarding), `onboarding-complete`, `map-download`,
+  `copy-tmx-id`, `sign-copy`, `studio-download` (`type`/`format`/`style`),
+  `activity-cta` (`kind`), `players-show-more`.
+- IP/страну Umami берёт из `CF-Connecting-IP`/`CF-IPCountry` (Cloudflare),
+  nginx пробрасывает их как есть.
 
 ## Известные грабли
 

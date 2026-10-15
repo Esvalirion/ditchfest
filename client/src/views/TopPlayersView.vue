@@ -13,6 +13,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { api } from '../utils/api';
+import { track } from '../utils/analytics';
 
 // Sortable columns — the medal tiers plus the raw finish count. Medals are
 // cumulative (Nadeo-style): beating a time earns that medal and every softer
@@ -83,6 +84,7 @@ async function load() {
 }
 
 async function loadMore() {
+  track('players-show-more', { offset: players.value.length });
   const seq = requestSeq;
   loadingMore.value = true;
   try {

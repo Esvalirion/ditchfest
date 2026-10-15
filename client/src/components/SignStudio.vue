@@ -36,6 +36,7 @@ import {
   findFormat,
 } from '../data/signStudioFormats.js';
 import { OVERLAY_CATEGORIES } from '../data/signs.js';
+import { track } from '../utils/analytics';
 
 // Active canvas format (one of the Nadeo aspect ratios — 1×1, 2×1, 4×1, 6×1).
 // Drives the canvas dimensions and the preview's aspect ratio. Switching format
@@ -213,6 +214,7 @@ async function onDownload(type) {
     } else {
       await downloadJpeg(canvasEl.value, 'ditchfest-sign.jpg', 0.92);
     }
+    track('studio-download', { type, format: selectedFormat.value, style: selectedKind.value });
   } catch (e) {
     downloadError.value = e.message || String(e);
   } finally {

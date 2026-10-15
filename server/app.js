@@ -10,6 +10,7 @@ const {
   getMapsPageForOg,
   injectOg,
 } = require('./services/og');
+const { injectAnalytics } = require('./services/analytics');
 
 const app = express();
 
@@ -38,7 +39,9 @@ if (SERVES_CLIENT) {
   // index.html is read once at boot and reused for every response: injecting
   // OG tags into a fresh copy per request would mean a disk read on every
   // crawler fetch. The built file is immutable per deploy, so this is safe.
-  const INDEX_HTML = fs.readFileSync(INDEX_HTML_PATH, 'utf8');
+  // The Umami tracker tag (if configured) goes in here once too, so both the
+  // OG-injected responses and the fallback below carry it.
+  const INDEX_HTML = injectAnalytics(fs.readFileSync(INDEX_HTML_PATH, 'utf8'));
   // index:false so GET / doesn't short-circuit on public/index.html before
   // reaching the catch-all below — without this, the root (and only the root)
   // would be served raw, bypassing the OG injection and leaking the relative
@@ -88,7 +91,7 @@ if (SERVES_CLIENT) {
       // but if something unexpected throws in the async path, never hang the
       // request — fall back to the plain SPA HTML so the page still loads.
       console.error('og injection failed', String(e));
-      res.sendFile(INDEX_HTML_PATH);
+      res.type('html').send(INDEX_HTML);
     }
   });
 }

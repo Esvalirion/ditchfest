@@ -13,6 +13,27 @@ services:
     networks:
       - tm-network
 
+  # Self-hosted Umami analytics (see server/services/analytics.js). Its own
+  # database (umami_db) in the shared tm-postgres; migrations run by the image
+  # on start. Bound to localhost: nginx proxies /stats/ on the site domains to
+  # it (the tracker, same-origin) and serves the dashboard on its own
+  # subdomain. Port 3006: 3001/3004/3005 are taken on this VPS.
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.0
+    container_name: umami
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${UMAMI_DATABASE_URL}
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      # Served as /stats/s.js — a neutral name instead of script.js /
+      # umami.js, which ad-block lists match on.
+      TRACKER_SCRIPT_NAME: s
+      DISABLE_TELEMETRY: 1
+    ports:
+      - "127.0.0.1:3006:3000"
+    networks:
+      - tm-network
+
 networks:
   tm-network:
     external: true
