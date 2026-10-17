@@ -409,6 +409,28 @@ identity×карта, потом счёт — финиш основы и аль�
 формулы (карты разной «солидности») и срезы по стилям TMX — стиль уже лежит
 на `maps.tmx_style`, срез делается join'ом на чтении.
 
+## API для Openplanet-плагина (`routes/plugin.js`, `services/pluginCatalog.js`)
+
+Внутриигровой браузер карт Ditchfest (аналог Better TOTD) живёт **отдельным
+проектом** `~/Desktop/projects/trackmania/ditchfest-openplanet`, сайт отдаёт
+ему два публичных эндпоинта:
+
+- `GET /api/plugin/maps` — весь каталог плоским списком: `editions[]`
+  (индекс = порядок `getEditions()`, 0 — новейший) и `maps[]` с `edition`
+  (индекс), голосами, `finishers` (`records_playercount`), медальными
+  временами и `medalCounts` (identity через `canon()`, накопительно, как
+  вкладка Players). Строится поверх `getEditions()`, поэтому папки/скрытие/
+  переименования те же, что на Maps. Кеш in-process 5 мин. До миграции 009
+  рекордные поля `null`, `recordsReady: false`.
+- `GET /api/plugin/records/:accountId` — `{records: {uid: [timeMs, position]}}`
+  из `map_records` по **сырому** аккаунту (без `canon()`: это «мой PB в
+  игре», игра про альтов не знает). Кривой id → 400, до 009 →
+  `{records: {}, pending: true}`.
+
+Зачем через сайт: ToS Openplanet не пускает плагины, которые тянут полные
+лидерборды у Nadeo, и сам советует кешировать их на своём сервере. Свип
+рекордов это уже делает. Контракт полей не ломать без правки плагина.
+
 ## Sign Studio (`client/src/views/StudioView.vue`, `client/src/components/SignStudio.vue`, `client/src/utils/gradientRenderer.js`, `client/src/data/signStudioGradients.js`, `client/src/data/signStudioFormats.js`)
 
 Клиентский «конструктор фонов» для знаков Trackmania — отдельный маршрут

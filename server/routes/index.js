@@ -17,5 +17,6 @@ router.use('/api', require('./links'));
 router.use('/api', require('./sync'));
 router.use('/api', require('./campaigns'));
 router.use('/api', require('./coauthors'));
+router.use('/api', require('./plugin'));
 
 module.exports = router;
