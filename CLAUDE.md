@@ -418,8 +418,12 @@ identity×карта, потом счёт — финиш основы и аль�
 - `GET /api/plugin/maps` — весь каталог плоским списком: `editions[]`
   (индекс = порядок `getEditions()`, 0 — новейший) и `maps[]` с `edition`
   (индекс), голосами, `finishers` (`records_playercount`), медальными
-  временами и `medalCounts` (identity через `canon()`, накопительно, как
-  вкладка Players). Строится поверх `getEditions()`, поэтому папки/скрытие/
+  временами, `medalCounts` (identity через `canon()`, накопительно, как
+  вкладка Players), `wr` (`{name, timeMs}` — место 1 + ник из
+  `player_names`), `recordsStored`/`slowestStoredMs` (сырые места в
+  `map_records` и самое медленное из них: при `finishers > recordsStored`
+  лидерборд обрезан капом 1000, счётчик медали с порогом медленнее
+  `slowestStoredMs` — нижняя граница, плагин рисует «N+»). Строится поверх `getEditions()`, поэтому папки/скрытие/
   переименования те же, что на Maps. Кеш in-process 5 мин. До миграции 009
   рекордные поля `null`, `recordsReady: false`.
 - `GET /api/plugin/records/:accountId` — `{records: {uid: [timeMs, position]}}`

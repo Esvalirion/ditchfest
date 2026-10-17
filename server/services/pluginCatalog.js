@@ -52,6 +52,7 @@ async function buildCatalog() {
         medalCounts: s.medalCounts || null,
         recordsStored: s.stored ?? null,
         slowestStoredMs: s.slowest ?? null,
+        wr: s.wr || null,
         style: m.style,
         tags: m.tags.map((t) => t.name),
         onTmx: m.onTmx,
@@ -69,7 +70,8 @@ async function buildCatalog() {
   };
 }
 
-/** map_uid -> { finishers, medals: [at,gold,silver,bronze] ms, medalCounts, stored, slowest }.
+/** map_uid -> { finishers, medals: [at,gold,silver,bronze] ms, medalCounts, stored, slowest,
+ *  wr: {name, timeMs} }.
  *  medalCounts are identities (canon()), counted cumulatively like the
  *  Players tab: an AT also counts as gold, silver and bronze. A linked main
  *  and alt on one map collapse to their best time first, then count once.
@@ -101,13 +103,24 @@ async function getMapRecordStats() {
       SELECT map_uid, COUNT(*)::int AS stored, MAX(time_ms) AS slowest
       FROM map_records
       GROUP BY map_uid
+    ),
+    -- world record: position 1 is Nadeo's own rank, so ties are already
+    -- broken by who drove it first (same rule as the Players board's WR)
+    wr AS (
+      SELECT DISTINCT ON (r.map_uid) r.map_uid, r.time_ms, pn.display_name
+      FROM map_records r
+      LEFT JOIN player_names pn ON pn.account_id = r.account_id
+      WHERE r.position = 1
+      ORDER BY r.map_uid, r.time_ms
     )
     SELECT m.map_uid, m.author_time_ms, m.gold_time_ms, m.silver_time_ms, m.bronze_time_ms,
            m.records_playercount, m.records_updated_at,
-           c.at, c.gold, c.silver, c.bronze, st.stored, st.slowest
+           c.at, c.gold, c.silver, c.bronze, st.stored, st.slowest,
+           wr.time_ms AS wr_time_ms, wr.display_name AS wr_name
     FROM maps m
     LEFT JOIN counts c ON c.map_uid = m.map_uid
     LEFT JOIN stored st ON st.map_uid = m.map_uid
+    LEFT JOIN wr ON wr.map_uid = m.map_uid
   `);
   const byMap = new Map();
   for (const r of rows) {
@@ -121,6 +134,7 @@ async function getMapRecordStats() {
       medalCounts: [r.at ?? 0, r.gold ?? 0, r.silver ?? 0, r.bronze ?? 0],
       stored: r.stored ?? 0,
       slowest: r.slowest ?? null,
+      wr: r.wr_time_ms == null ? null : { name: r.wr_name || null, timeMs: r.wr_time_ms },
     });
   }
   return byMap;
