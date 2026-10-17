@@ -50,6 +50,8 @@ async function buildCatalog() {
         finishers: s.finishers ?? null,
         medals: s.medals || null,
         medalCounts: s.medalCounts || null,
+        recordsStored: s.stored ?? null,
+        slowestStoredMs: s.slowest ?? null,
         style: m.style,
         tags: m.tags.map((t) => t.name),
         onTmx: m.onTmx,
@@ -67,10 +69,17 @@ async function buildCatalog() {
   };
 }
 
-/** map_uid -> { finishers, medals: [at,gold,silver,bronze] ms, medalCounts }.
+/** map_uid -> { finishers, medals: [at,gold,silver,bronze] ms, medalCounts, stored, slowest }.
  *  medalCounts are identities (canon()), counted cumulatively like the
  *  Players tab: an AT also counts as gold, silver and bronze. A linked main
- *  and alt on one map collapse to their best time first, then count once. */
+ *  and alt on one map collapse to their best time first, then count once.
+ *
+ *  `stored` / `slowest` = leaderboard places (raw accounts, comparable to
+ *  records_playercount) we hold and the slowest of their times. The sweep
+ *  keeps only the top MAX_RECORDS_PER_MAP places: when finishers > stored, a
+ *  player missing from the records may be ranked below the cut, and a medal
+ *  whose threshold is slower than `slowest` has holders we can't see — its
+ *  count is a lower bound. Faster thresholds stay exact. */
 async function getMapRecordStats() {
   const { rows } = await pool.query(`
     WITH best AS (
@@ -87,12 +96,18 @@ async function getMapRecordStats() {
       FROM best b
       JOIN maps m ON m.map_uid = b.map_uid
       GROUP BY b.map_uid
+    ),
+    stored AS (
+      SELECT map_uid, COUNT(*)::int AS stored, MAX(time_ms) AS slowest
+      FROM map_records
+      GROUP BY map_uid
     )
     SELECT m.map_uid, m.author_time_ms, m.gold_time_ms, m.silver_time_ms, m.bronze_time_ms,
            m.records_playercount, m.records_updated_at,
-           c.at, c.gold, c.silver, c.bronze
+           c.at, c.gold, c.silver, c.bronze, st.stored, st.slowest
     FROM maps m
     LEFT JOIN counts c ON c.map_uid = m.map_uid
+    LEFT JOIN stored st ON st.map_uid = m.map_uid
   `);
   const byMap = new Map();
   for (const r of rows) {
@@ -104,6 +119,8 @@ async function getMapRecordStats() {
         ? null
         : [r.author_time_ms, r.gold_time_ms, r.silver_time_ms, r.bronze_time_ms],
       medalCounts: [r.at ?? 0, r.gold ?? 0, r.silver ?? 0, r.bronze ?? 0],
+      stored: r.stored ?? 0,
+      slowest: r.slowest ?? null,
     });
   }
   return byMap;
