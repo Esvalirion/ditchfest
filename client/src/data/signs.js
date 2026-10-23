@@ -46,7 +46,7 @@ export const SIGNS = [
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_Danifill.png', alt: 'Overlay Mapper Danifill' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_DD0LLA.png', alt: 'Overlay Mapper DD0LLA' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_DoBeVibin.png', alt: 'Overlay Mapper DD0LLA' },
-  { type: 'mappers', src: '/Signs/Overlay/Names/df_mp_esvalirion.png', alt: 'Overlay Mapper esvalirion' },
+  { type: 'mappers', src: 'https://download.dashmap.live/75ffdc83-62bf-47f9-aa8f-66fc85c5a781/df_mp_esvalirion.png', alt: 'Overlay Mapper esvalirion' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_faiby.png', alt: 'Overlay Mapper faiby' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_Floki.png', alt: 'Overlay Mapper Floki' },
   { type: 'mappers', src: 'https://download.dashmap.live/e62622c9-7005-4b0e-a781-5e8a6c7c000f/df_mp_FormulaINFINITY.png', alt: 'Overlay Mapper FormulaINFINITY' },
