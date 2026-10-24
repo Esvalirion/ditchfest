@@ -14,6 +14,10 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 Расхождения с оригиналом ниже помечены явно — это не баги, а осознанные
 решения при переносе.
 
+## Статус (2026-10-24)
+
+- Работает в проде (`df.esvalirion.tech`, `ditchfest.su`). Последнее: API для плагина Ditchfest Maps (`routes/plugin.js`), знак маппера для esvalirion, Umami. Не закоммичен 1 файл.
+
 ## Стек
 
 | Слой | Технологии |
