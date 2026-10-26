@@ -4,6 +4,10 @@ const { validateOpenplanetToken } = require('../services/openplanetAuth');
 const { issueToken } = require('../services/jwt');
 const { grantAchievement } = require('../services/achievements');
 const { OPENPLANET_AUTH_SECRET } = require('../config');
+const { pool } = require('../db');
+const { requireAuth } = require('../middleware/auth');
+const { castVote, castPendingVote, isPendingVotesReady } = require('../services/votes');
+const { isInRoom } = require('../services/room');
 
 const router = Router();
 
@@ -24,19 +28,58 @@ router.get('/plugin/records/:accountId', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/plugin/room-maps?uids=a,b,c&accountId=X — public. The room's
-// playlist (uids in the room's order, as the plugin got them from Nadeo)
-// enriched with name, author, votes and this player's own vote.
+// GET /api/plugin/room-maps?accountId=X — public. The fest room (running,
+// joinLink, serverLogin) and its playlist in play order with name, author,
+// votes and this player's own vote — pending ones included for maps not on
+// the site yet (onSite: false).
 router.get('/plugin/room-maps', async (req, res) => {
-  const uids = String(req.query.uids || '').split(',').filter(Boolean);
-  const result = await getRoomMaps(uids, req.query.accountId || null);
-  if (!result) return res.status(400).json({ error: 'bad_request' });
+  let result;
+  try {
+    result = await getRoomMaps(req.query.accountId || null);
+  } catch (e) {
+    console.error('[plugin/room-maps]', String(e));
+    return res.status(502).json({ error: 'room_unavailable' });
+  }
+  if (!result) return res.status(400).json({ error: 'bad_account_id' });
   res.json(result);
+});
+
+// POST /api/plugin/vote { mapUid, value } — the plugin's "+", JWT from
+// /api/plugin/login. A catalog map votes like POST /api/vote; a map that's
+// only in the fest room so far parks the vote in pending_votes until the
+// catalog sync brings the map in (services/votes.js resolvePendingVotes).
+router.post('/plugin/vote', requireAuth, async (req, res) => {
+  const { mapUid, value } = req.body || {};
+  if (!mapUid || typeof mapUid !== 'string') return res.status(400).json({ error: 'missing_mapUid' });
+  const wantVote = value === true;
+
+  const onSite = (await pool.query('SELECT 1 FROM maps WHERE map_uid = $1', [mapUid])).rowCount > 0;
+  if (onSite) {
+    const votes = await castVote(req.accountId, mapUid, wantVote);
+    return res.json({ mapUid, voted: wantVote, votes, onSite });
+  }
+
+  if (!(await isPendingVotesReady())) return res.status(503).json({ error: 'pending_votes_disabled' });
+  // Only a "+" needs the map in the room; taking one back always works, even
+  // after the playlist has moved on.
+  if (wantVote) {
+    let inRoom;
+    try {
+      inRoom = await isInRoom(mapUid);
+    } catch (e) {
+      console.error('[plugin/vote]', String(e));
+      return res.status(502).json({ error: 'room_unavailable' });
+    }
+    if (!inRoom) return res.status(404).json({ error: 'unknown_map' });
+  }
+
+  const votes = await castPendingVote(req.accountId, mapUid, wantVote);
+  res.json({ mapUid, voted: wantVote, votes, onSite });
 });
 
 // POST /api/plugin/login { token } — trade an Openplanet Auth::GetToken()
 // token for the same session JWT the website's Ubisoft login gives. The
-// plugin keeps it (7 days) and votes through the regular POST /api/vote.
+// plugin keeps it (7 days) and votes through POST /api/plugin/vote.
 router.post('/plugin/login', async (req, res) => {
   if (!OPENPLANET_AUTH_SECRET) return res.status(503).json({ error: 'plugin_auth_disabled' });
   const { token } = req.body || {};

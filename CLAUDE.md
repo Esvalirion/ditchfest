@@ -17,6 +17,7 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 ## Статус (2026-10-26)
 
 - Работает в проде (`df.esvalirion.tech`, `ditchfest.su`). Последнее: API для плагина Ditchfest (`routes/plugin.js`): `room-maps` (плейлист комнаты с названиями, авторами, голосами) и `login` (Openplanet Auth → JWT сайта, дальше обычный `POST /api/vote`). Секрет `OPENPLANET_AUTH_SECRET` в `/opt/ditchfest-signs/.env` на VPS.
+- Плагин и фест-рума (2026-10-26): `GET /api/plugin/room-maps?accountId=` читает руму через tm-api (`/live/club/:club/room/:room`, клуб/рума в `DF_ROOM_*`), отдаёт плейлист с голосами. `POST /api/plugin/vote`: карта на сайте → обычный голос, карта только в руме → `pending_votes` (миграция 010). Порядок на фесте: рума с картами без кампании → после феста админ создаёт кампанию → sync забирает карты и `resolvePendingVotes` переносит голоса в `votes` (старше 30 дней чистятся).
 
 ## Стек
 

@@ -1,8 +1,8 @@
 const { Router } = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { canon, groupMembers } = require('../services/links');
-const { refreshAccount } = require('../services/grants');
+const { canon } = require('../services/links');
+const { castVote } = require('../services/votes');
 const { getAppToken, resolveDisplayNames } = require('../services/names');
 
 const router = Router();
@@ -19,35 +19,8 @@ router.post('/vote', requireAuth, async (req, res) => {
   const mapExists = await pool.query('SELECT 1 FROM maps WHERE map_uid = $1', [mapUid]);
   if (mapExists.rowCount === 0) return res.status(404).json({ error: 'unknown_map' });
 
-  // The vote is recorded on the account that cast it; counting resolves it
-  // to the person, so a second linked account can't add a second "+".
-  if (wantVote) {
-    await pool.query(
-      'INSERT INTO votes (account_id, map_uid) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [req.accountId, mapUid]
-    );
-  } else {
-    await pool.query('DELETE FROM votes WHERE account_id = $1 AND map_uid = $2', [
-      req.accountId,
-      mapUid,
-    ]);
-  }
-
-  const { rows } = await pool.query(
-    `SELECT COUNT(DISTINCT ${canon('v.account_id')})::int AS c FROM votes v WHERE v.map_uid = $1`,
-    [mapUid]
-  );
-
-  // Liking something can unlock a badge. Rank is skipped: casting a vote
-  // can't move the voter's own placement.
-  try {
-    const members = await groupMembers(req.accountId);
-    await refreshAccount(members[0], members, null);
-  } catch (e) {
-    console.error('achievement refresh failed', String(e));
-  }
-
-  res.json({ mapUid, voted: wantVote, votes: rows[0].c });
+  const votes = await castVote(req.accountId, mapUid, wantVote);
+  res.json({ mapUid, voted: wantVote, votes });
 });
 
 // GET /api/map-voters?mapUid=X — public. Who voted for one map: accountId +

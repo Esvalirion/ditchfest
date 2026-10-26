@@ -13,6 +13,8 @@ const { pool } = require('../db');
 const { canon, groupMembers } = require('./links');
 const { getEditions } = require('./editions');
 const { isRecordsSchemaReady } = require('./records');
+const { getRoom } = require('./room');
+const { isPendingVotesReady } = require('./votes');
 
 // The catalog changes with the 30-min sync and the 5-min records sweep; one
 // plugin start = one fetch, so a short in-process cache only shields the full
@@ -186,46 +188,76 @@ async function getPluginRecords(accountId) {
   return { records };
 }
 
-const MAP_UID_RE = /^[A-Za-z0-9_-]{1,40}$/;
-const ROOM_MAPS_MAX = 100;
-
-/** The plugin's room view: the maps a club room plays, in the room's order,
- *  with what the site knows about each — name, author, votes (identities,
- *  like everywhere on the site) and whether this player already voted.
+/** The plugin's room view: the fest room's playlist in play order, each map
+ *  with name, author, votes (identities, like everywhere on the site) and
+ *  whether this player already voted.
+ *  While the room runs its maps usually aren't in the catalog yet (the
+ *  campaign is created after the fest, see services/room.js): those take
+ *  name/author from the room and count pending_votes instead (`onSite`
+ *  false). Once a map is in the catalog, pending votes have been moved into
+ *  `votes`, so each map reads exactly one of the two tables.
  *  `voted` reads by plain accountId: votes are public (/api/map-voters), so
  *  there's nothing to protect here; casting one needs the JWT.
- *  Strings are never null (AngelScript's Json reads are happier that way): a
- *  map the site doesn't know (not a Ditchfest map) comes back with name: ''
- *  and votable: false, and the plugin shows the uid or Nadeo's name instead.
- *  Returns null for malformed input. */
-async function getRoomMaps(uids, accountId) {
-  if (!uids.length || uids.length > ROOM_MAPS_MAX || !uids.every((u) => MAP_UID_RE.test(u))) return null;
+ *  `shuffle`: the room plays the playlist in random order, so the plugin
+ *  shouldn't mark "next" from the list order.
+ *  Strings are never null (AngelScript's Json reads are happier that way).
+ *  Returns null for a malformed accountId. */
+async function getRoomMaps(accountId) {
   if (accountId && !ACCOUNT_ID_RE.test(accountId)) return null;
+  const room = await getRoom();
+  const uids = room.maps.map((m) => m.mapUid);
+  const pendingReady = await isPendingVotesReady();
 
-  const { rows } = await pool.query(
-    `SELECT m.map_uid, m.name, m.author_name,
-            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
-              WHERE v.map_uid = m.map_uid) AS votes
-     FROM maps m WHERE m.map_uid = ANY($1)`,
-    [uids]
-  );
-  const known = new Map(rows.map((r) => [r.map_uid, r]));
+  const [known, pending, members] = await Promise.all([
+    uids.length
+      ? pool.query(
+          `SELECT m.map_uid, m.name, m.author_name,
+                  (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
+                    WHERE v.map_uid = m.map_uid) AS votes
+           FROM maps m WHERE m.map_uid = ANY($1)`,
+          [uids]
+        )
+      : { rows: [] },
+    uids.length && pendingReady
+      ? pool.query(
+          `SELECT p.map_uid, COUNT(DISTINCT ${canon('p.account_id')})::int AS votes
+           FROM pending_votes p WHERE p.map_uid = ANY($1) GROUP BY p.map_uid`,
+          [uids]
+        )
+      : { rows: [] },
+    accountId ? groupMembers(accountId.toLowerCase()) : [],
+  ]);
+  const byUid = new Map(known.rows.map((r) => [r.map_uid, r]));
+  const pendingByUid = new Map(pending.rows.map((r) => [r.map_uid, r.votes]));
 
   let mine = new Set();
-  if (accountId) {
-    const members = await groupMembers(accountId.toLowerCase());
+  if (members.length && uids.length) {
     const r = await pool.query(
-      'SELECT DISTINCT map_uid FROM votes WHERE account_id = ANY($1) AND map_uid = ANY($2)',
+      `SELECT map_uid FROM votes WHERE account_id = ANY($1) AND map_uid = ANY($2)
+       ${pendingReady ? 'UNION SELECT map_uid FROM pending_votes WHERE account_id = ANY($1) AND map_uid = ANY($2)' : ''}`,
       [members, uids]
     );
     mine = new Set(r.rows.map((row) => row.map_uid));
   }
 
   return {
-    maps: uids.map((uid) => {
-      const m = known.get(uid);
-      if (!m) return { uid, name: '', author: '', votes: 0, voted: false, votable: false };
-      return { uid, name: m.name, author: m.author_name || '', votes: m.votes, voted: mine.has(uid), votable: true };
+    name: room.name || '',
+    running: room.running,
+    joinLink: room.joinLink || '',
+    serverLogin: room.serverLogin || '',
+    playerCount: room.playerCount,
+    shuffle: !!room.shuffle,
+    maps: room.maps.map((rm) => {
+      const m = byUid.get(rm.mapUid);
+      return {
+        uid: rm.mapUid,
+        name: m ? m.name : rm.name || '',
+        rawName: rm.rawName || '',
+        author: (m && m.author_name) || rm.author || '',
+        votes: m ? m.votes : pendingByUid.get(rm.mapUid) || 0,
+        voted: mine.has(rm.mapUid),
+        onSite: !!m,
+      };
     }),
   };
 }

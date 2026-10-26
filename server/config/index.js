@@ -33,4 +33,10 @@ module.exports = {
   // secret from the Authentication tab of the plugin's admin page on
   // openplanet.dev. Empty = plugin login answers 503.
   OPENPLANET_AUTH_SECRET: process.env.OPENPLANET_AUTH_SECRET || '',
+
+  // Shared Nadeo gateway on tm-network (trackmania/tm-api) and the fest club
+  // room the plugin shows (services/room.js). Not secrets.
+  TM_API_URL: process.env.TM_API_URL || 'http://tm-api-svc:3002',
+  DF_ROOM_CLUB_ID: Number(process.env.DF_ROOM_CLUB_ID || 52818),
+  DF_ROOM_ID: Number(process.env.DF_ROOM_ID || 316252),
 };

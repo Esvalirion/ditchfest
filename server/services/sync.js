@@ -21,6 +21,7 @@ const {
 const { lookupMapByUid } = require('./tmx');
 const { getAppToken, resolveDisplayNames } = require('./names');
 const { refreshEveryone } = require('./grants');
+const { resolvePendingVotes, isPendingVotesReady } = require('./votes');
 const { TM_CLUB_ID, TM_FOLDER_ID, TMIO_USER_AGENT } = require('../config');
 
 // Every run refreshes a bounded batch so we never burst through trackmania.io's
@@ -115,6 +116,16 @@ async function syncCatalog() {
     campaignsFetched++;
   }
 
+  // Fest votes cast in the room before this edition's campaign existed:
+  // now that its maps may be in, move them into `votes` — before the
+  // achievement sweep below, so badges see them.
+  let pendingVotesResolved = 0;
+  try {
+    if (await isPendingVotesReady()) pendingVotesResolved = await resolvePendingVotes();
+  } catch (e) {
+    console.error('sync: pending votes resolution failed', String(e));
+  }
+
   // Fill in any missing mapper display names (trackmania.io sometimes omits
   // them). Resolved via the official OAuth display-names API, batched per run.
   let namesResolved = 0;
@@ -188,6 +199,7 @@ async function syncCatalog() {
     campaignsFetched,
     mapsUpserted,
     neverSynced,
+    pendingVotesResolved,
     namesResolved,
     tmxStylesRefreshed,
     achievementsGranted,
