@@ -88,6 +88,22 @@ router.post('/plugin/vote', async (req, res) => {
   res.json({ mapUid, hasVoted: wantVote, votes, isOnSite: onSite });
 });
 
+// GET /api/plugin/random — public. One random Ditchfest map from a visible
+// edition (same set as the Maps page), so the plugin's "random map" button
+// doesn't need the whole ~2000-map catalog.
+router.get('/plugin/random', async (_req, res) => {
+  const { rows } = await pool.query(`
+    SELECT m.map_uid AS uid, m.name, m.author_name AS author
+    FROM maps m
+    JOIN editions e ON e.campaign_id = COALESCE(m.display_campaign_id, m.campaign_id)
+    WHERE NOT e.hidden
+    ORDER BY random()
+    LIMIT 1
+  `);
+  if (!rows.length) return res.status(404).json({ error: 'no_maps' });
+  res.json({ uid: rows[0].uid, name: rows[0].name, author: rows[0].author || '' });
+});
+
 // GET /api/plugin/fest[?isTest=1] — public. Is it fest day (Friday in Moscow),
 // when the next fest starts, and the banner text. Schedule in
 // services/fest.js. isTest answers as if today were fest day, so the plugin's
