@@ -82,10 +82,13 @@ router.post('/plugin/vote', async (req, res) => {
   res.json({ mapUid, hasVoted: wantVote, votes, isOnSite: onSite });
 });
 
-// GET /api/plugin/fest — public. Is it fest day (Friday in Moscow), when the
-// next fest starts, and the banner text. Schedule in services/fest.js.
-router.get('/plugin/fest', (_req, res) => {
-  res.json(getFestState());
+// GET /api/plugin/fest[?isTest=1] — public. Is it fest day (Friday in Moscow),
+// when the next fest starts, and the banner text. Schedule in
+// services/fest.js. isTest answers as if today were fest day, so the plugin's
+// banner can be checked any day; it's harmless, the banner is all it changes.
+router.get('/plugin/fest', (req, res) => {
+  const isTest = req.query.isTest === '1' || req.query.isTest === 'true';
+  res.json(getFestState(Date.now(), { isTest }));
 });
 
 /** Openplanet token -> { accountId, displayName }, or null after answering

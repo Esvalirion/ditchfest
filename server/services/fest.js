@@ -11,8 +11,14 @@ const BANNER = 'ПУНТ, ВЕЧЕРОМ ДИЧФЕСТ';
 
 /** { isFestDay, nextFestAt, banner }: isFestDay = it's the fest Friday in Moscow
  *  (00:00–24:00 MSK); nextFestAt = unix seconds of the upcoming start, or of
- *  today's while it hasn't begun; banner = text to show on fest day, else ''. */
-function getFestState(now = Date.now()) {
+ *  today's while it hasn't begun; banner = text to show on fest day, else ''.
+ *  isTest: pretend it's fest day (isTest: true in the answer marks it). */
+function getFestState(now = Date.now(), { isTest = false } = {}) {
+  if (isTest) {
+    const real = getFestState(now);
+    return { ...real, isFestDay: true, banner: BANNER, isTest: true };
+  }
+
   let next = FEST_ANCHOR_MS;
   while (next <= now) next += FEST_INTERVAL_MS;
 
