@@ -10,7 +10,7 @@
 // medal times, finisher count, how many identities hold each medal. Before
 // 009 is applied those fields are just null and the plugin shows "?".
 const { pool } = require('../db');
-const { canon } = require('./links');
+const { canon, groupMembers } = require('./links');
 const { getEditions } = require('./editions');
 const { isRecordsSchemaReady } = require('./records');
 
@@ -186,4 +186,48 @@ async function getPluginRecords(accountId) {
   return { records };
 }
 
-module.exports = { getPluginCatalog, getPluginRecords };
+const MAP_UID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+const ROOM_MAPS_MAX = 100;
+
+/** The plugin's room view: the maps a club room plays, in the room's order,
+ *  with what the site knows about each — name, author, votes (identities,
+ *  like everywhere on the site) and whether this player already voted.
+ *  `voted` reads by plain accountId: votes are public (/api/map-voters), so
+ *  there's nothing to protect here; casting one needs the JWT.
+ *  Strings are never null (AngelScript's Json reads are happier that way): a
+ *  map the site doesn't know (not a Ditchfest map) comes back with name: ''
+ *  and votable: false, and the plugin shows the uid or Nadeo's name instead.
+ *  Returns null for malformed input. */
+async function getRoomMaps(uids, accountId) {
+  if (!uids.length || uids.length > ROOM_MAPS_MAX || !uids.every((u) => MAP_UID_RE.test(u))) return null;
+  if (accountId && !ACCOUNT_ID_RE.test(accountId)) return null;
+
+  const { rows } = await pool.query(
+    `SELECT m.map_uid, m.name, m.author_name,
+            (SELECT COUNT(DISTINCT ${canon('v.account_id')})::int FROM votes v
+              WHERE v.map_uid = m.map_uid) AS votes
+     FROM maps m WHERE m.map_uid = ANY($1)`,
+    [uids]
+  );
+  const known = new Map(rows.map((r) => [r.map_uid, r]));
+
+  let mine = new Set();
+  if (accountId) {
+    const members = await groupMembers(accountId.toLowerCase());
+    const r = await pool.query(
+      'SELECT DISTINCT map_uid FROM votes WHERE account_id = ANY($1) AND map_uid = ANY($2)',
+      [members, uids]
+    );
+    mine = new Set(r.rows.map((row) => row.map_uid));
+  }
+
+  return {
+    maps: uids.map((uid) => {
+      const m = known.get(uid);
+      if (!m) return { uid, name: '', author: '', votes: 0, voted: false, votable: false };
+      return { uid, name: m.name, author: m.author_name || '', votes: m.votes, voted: mine.has(uid), votable: true };
+    }),
+  };
+}
+
+module.exports = { getPluginCatalog, getPluginRecords, getRoomMaps };

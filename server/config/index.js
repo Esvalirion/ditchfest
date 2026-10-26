@@ -28,4 +28,9 @@ module.exports = {
   // Guards the manual POST /api/sync trigger (X-Sync-Secret header) — the
   // cron-scheduled run doesn't need it, only the manual one does.
   SYNC_SECRET: process.env.SYNC_SECRET || '',
+
+  // Openplanet plugin auth (routes/plugin.js POST /api/plugin/login): the
+  // secret from the Authentication tab of the plugin's admin page on
+  // openplanet.dev. Empty = plugin login answers 503.
+  OPENPLANET_AUTH_SECRET: process.env.OPENPLANET_AUTH_SECRET || '',
 };
