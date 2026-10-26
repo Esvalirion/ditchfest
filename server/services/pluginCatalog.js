@@ -193,12 +193,12 @@ async function getPluginRecords(accountId) {
  *  whether this player already voted.
  *  While the room runs its maps usually aren't in the catalog yet (the
  *  campaign is created after the fest, see services/room.js): those take
- *  name/author from the room and count pending_votes instead (`onSite`
+ *  name/author from the room and count pending_votes instead (`isOnSite`
  *  false). Once a map is in the catalog, pending votes have been moved into
  *  `votes`, so each map reads exactly one of the two tables.
- *  `voted` reads by plain accountId: votes are public (/api/map-voters), so
+ *  `hasVoted` reads by plain accountId: votes are public (/api/map-voters), so
  *  there's nothing to protect here; casting one needs the JWT.
- *  `shuffle`: the room plays the playlist in random order, so the plugin
+ *  `isShuffled`: the room plays the playlist in random order, so the plugin
  *  shouldn't mark "next" from the list order.
  *  Strings are never null (AngelScript's Json reads are happier that way).
  *  Returns null for a malformed accountId. */
@@ -242,11 +242,11 @@ async function getRoomMaps(accountId) {
 
   return {
     name: room.name || '',
-    running: room.running,
+    isRunning: room.running,
     joinLink: room.joinLink || '',
     serverLogin: room.serverLogin || '',
     playerCount: room.playerCount,
-    shuffle: !!room.shuffle,
+    isShuffled: !!room.shuffle,
     maps: room.maps.map((rm) => {
       const m = byUid.get(rm.mapUid);
       return {
@@ -255,8 +255,8 @@ async function getRoomMaps(accountId) {
         rawName: rm.rawName || '',
         author: (m && m.author_name) || rm.author || '',
         votes: m ? m.votes : pendingByUid.get(rm.mapUid) || 0,
-        voted: mine.has(rm.mapUid),
-        onSite: !!m,
+        hasVoted: mine.has(rm.mapUid),
+        isOnSite: !!m,
       };
     }),
   };

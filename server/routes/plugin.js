@@ -27,10 +27,10 @@ router.get('/plugin/records/:accountId', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/plugin/room-maps?accountId=X — public. The fest room (running,
+// GET /api/plugin/room-maps?accountId=X — public. The fest room (isRunning,
 // joinLink, serverLogin) and its playlist in play order with name, author,
 // votes and this player's own vote — pending ones included for maps not on
-// the site yet (onSite: false).
+// the site yet (isOnSite: false).
 router.get('/plugin/room-maps', async (req, res) => {
   let result;
   try {
@@ -61,7 +61,7 @@ router.post('/plugin/vote', async (req, res) => {
   const onSite = (await pool.query('SELECT 1 FROM maps WHERE map_uid = $1', [mapUid])).rowCount > 0;
   if (onSite) {
     const votes = await castVote(req.accountId, mapUid, wantVote);
-    return res.json({ mapUid, voted: wantVote, votes, onSite });
+    return res.json({ mapUid, hasVoted: wantVote, votes, isOnSite: onSite });
   }
 
   if (!(await isPendingVotesReady())) return res.status(503).json({ error: 'pending_votes_disabled' });
@@ -79,7 +79,7 @@ router.post('/plugin/vote', async (req, res) => {
   }
 
   const votes = await castPendingVote(req.accountId, mapUid, wantVote);
-  res.json({ mapUid, voted: wantVote, votes, onSite });
+  res.json({ mapUid, hasVoted: wantVote, votes, isOnSite: onSite });
 });
 
 // GET /api/plugin/fest — public. Is it fest day (Friday in Moscow), when the

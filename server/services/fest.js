@@ -9,7 +9,7 @@ const DAY_MS = 24 * 3600_000;
 
 const BANNER = 'ПУНТ, ВЕЧЕРОМ ДИЧФЕСТ';
 
-/** { festDay, nextFestAt, banner }: festDay = it's the fest Friday in Moscow
+/** { isFestDay, nextFestAt, banner }: isFestDay = it's the fest Friday in Moscow
  *  (00:00–24:00 MSK); nextFestAt = unix seconds of the upcoming start, or of
  *  today's while it hasn't begun; banner = text to show on fest day, else ''. */
 function getFestState(now = Date.now()) {
@@ -19,14 +19,14 @@ function getFestState(now = Date.now()) {
   // The latest fest start at or before now, and the Moscow midnight before it.
   const last = next - FEST_INTERVAL_MS;
   const dayStart = (offset) => offset - ((offset + MSK_OFFSET_MS) % DAY_MS);
-  const festDay =
+  const isFestDay =
     (now >= dayStart(last) && now < dayStart(last) + DAY_MS) ||
     (now >= dayStart(next) && now < dayStart(next) + DAY_MS);
 
   return {
-    festDay,
+    isFestDay,
     nextFestAt: Math.floor(next / 1000),
-    banner: festDay ? BANNER : '',
+    banner: isFestDay ? BANNER : '',
   };
 }
 
