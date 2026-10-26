@@ -1,13 +1,12 @@
 const { Router } = require('express');
 const { getPluginCatalog, getPluginRecords, getRoomMaps } = require('../services/pluginCatalog');
 const { validateOpenplanetToken } = require('../services/openplanetAuth');
-const { issueToken } = require('../services/jwt');
 const { grantAchievement } = require('../services/achievements');
 const { OPENPLANET_AUTH_SECRET } = require('../config');
 const { pool } = require('../db');
-const { requireAuth } = require('../middleware/auth');
 const { castVote, castPendingVote, isPendingVotesReady } = require('../services/votes');
 const { isInRoom } = require('../services/room');
+const { getFestState } = require('../services/fest');
 
 const router = Router();
 
@@ -44,14 +43,20 @@ router.get('/plugin/room-maps', async (req, res) => {
   res.json(result);
 });
 
-// POST /api/plugin/vote { mapUid, value } — the plugin's "+", JWT from
-// /api/plugin/login. A catalog map votes like POST /api/vote; a map that's
-// only in the fest room so far parks the vote in pending_votes until the
-// catalog sync brings the map in (services/votes.js resolvePendingVotes).
-router.post('/plugin/vote', requireAuth, async (req, res) => {
-  const { mapUid, value } = req.body || {};
+// POST /api/plugin/vote { token, mapUid, value } — the plugin's "+".
+// `token` is a fresh Openplanet Auth::GetToken() token, checked on every
+// vote: votes are rare, and it spares the plugin keeping a session of its
+// own. A catalog map votes like POST /api/vote; a map that's only in the
+// fest room so far parks the vote in pending_votes until the catalog sync
+// brings the map in (services/votes.js resolvePendingVotes).
+router.post('/plugin/vote', async (req, res) => {
+  const { token, mapUid, value } = req.body || {};
   if (!mapUid || typeof mapUid !== 'string') return res.status(400).json({ error: 'missing_mapUid' });
   const wantVote = value === true;
+
+  const who = await authPlugin(token, res);
+  if (!who) return;
+  req.accountId = who.accountId;
 
   const onSite = (await pool.query('SELECT 1 FROM maps WHERE map_uid = $1', [mapUid])).rowCount > 0;
   if (onSite) {
@@ -77,34 +82,42 @@ router.post('/plugin/vote', requireAuth, async (req, res) => {
   res.json({ mapUid, voted: wantVote, votes, onSite });
 });
 
-// POST /api/plugin/login { token } — trade an Openplanet Auth::GetToken()
-// token for the same session JWT the website's Ubisoft login gives. The
-// plugin keeps it (7 days) and votes through POST /api/plugin/vote.
-router.post('/plugin/login', async (req, res) => {
-  if (!OPENPLANET_AUTH_SECRET) return res.status(503).json({ error: 'plugin_auth_disabled' });
-  const { token } = req.body || {};
-  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'missing_token' });
+// GET /api/plugin/fest — public. Is it fest day (Friday in Moscow), when the
+// next fest starts, and the banner text. Schedule in services/fest.js.
+router.get('/plugin/fest', (_req, res) => {
+  res.json(getFestState());
+});
 
+/** Openplanet token -> { accountId, displayName }, or null after answering
+ *  the request with the matching error. */
+async function authPlugin(token, res) {
+  if (!OPENPLANET_AUTH_SECRET) {
+    res.status(503).json({ error: 'plugin_auth_disabled' });
+    return null;
+  }
+  if (!token || typeof token !== 'string') {
+    res.status(401).json({ error: 'missing_token' });
+    return null;
+  }
   let who;
   try {
     who = await validateOpenplanetToken(token);
   } catch (e) {
-    console.error('[plugin/login]', String(e));
-    return res.status(502).json({ error: 'openplanet_unreachable' });
+    console.error('[plugin auth]', String(e));
+    res.status(502).json({ error: 'openplanet_unreachable' });
+    return null;
   }
-  if (!who) return res.status(401).json({ error: 'invalid_token' });
-
+  if (!who) {
+    res.status(401).json({ error: 'invalid_token' });
+    return null;
+  }
+  // First contact from the plugin counts as showing up, like a site login.
   try {
     await grantAchievement(who.accountId, 'first_login');
   } catch (e) {
     console.error('first_login grant failed', String(e));
   }
-
-  res.json({
-    token: issueToken(who.accountId, who.displayName),
-    accountId: who.accountId,
-    displayName: who.displayName,
-  });
-});
+  return who;
+}
 
 module.exports = router;

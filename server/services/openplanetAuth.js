@@ -1,8 +1,7 @@
 // Openplanet plugin auth (https://openplanet.dev/docs/reference/auth). The
 // in-game plugin can't do the Ubisoft OAuth flow, but it can ask Openplanet
-// for a short-lived token (Auth::GetToken, ~5 min) proving who the player is.
-// We trade it once for our own session JWT (routes/plugin.js), so the plugin
-// then talks to the regular endpoints (POST /api/vote) like the website does.
+// for a short-lived token (Auth::GetToken, ~5 min) proving who the player is,
+// and sends it along with each vote (routes/plugin.js POST /api/plugin/vote).
 const { OPENPLANET_AUTH_SECRET } = require('../config');
 
 const VALIDATE_URL = 'https://openplanet.dev/api/auth/validate';
