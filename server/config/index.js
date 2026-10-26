@@ -36,10 +36,11 @@ module.exports = {
 
   // Shared Nadeo gateway on tm-network (trackmania/tm-api) and the club rooms
   // the plugin may ask about (services/room.js), "club:room" pairs. The first
-  // is the default — the DITCHFEST fest room; the second is the Openplanet
-  // School room the plugin's developer builds use. Not secrets.
+  // is the default — the DITCHFEST fest room; then the Openplanet School
+  // room and Max's own test room "whitedf" (club 22374), which the plugin's
+  // developer builds use. Not secrets.
   TM_API_URL: process.env.TM_API_URL || 'http://tm-api-svc:3002',
-  PLUGIN_ROOMS: (process.env.PLUGIN_ROOMS || '52818:316252,70151:635523')
+  PLUGIN_ROOMS: (process.env.PLUGIN_ROOMS || '52818:316252,70151:635523,22374:1197716')
     .split(',')
     .map((pair) => pair.split(':').map(Number))
     .map(([club, room]) => ({ club, room })),
