@@ -5,7 +5,7 @@ const { grantAchievement } = require('../services/achievements');
 const { OPENPLANET_AUTH_SECRET } = require('../config');
 const { pool } = require('../db');
 const { castVote, castPendingVote, isPendingVotesReady } = require('../services/votes');
-const { isInRoom } = require('../services/room');
+const { resolveRoom, isInRoom } = require('../services/room');
 const { getFestState } = require('../services/fest');
 
 const router = Router();
@@ -27,14 +27,17 @@ router.get('/plugin/records/:accountId', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/plugin/room-maps?accountId=X — public. The fest room (isRunning,
+// GET /api/plugin/room-maps?accountId=X[&club=&room=] — public. The fest room
+// (or another allowed one, see services/room.js resolveRoom) (isRunning,
 // joinLink, serverLogin) and its playlist in play order with name, author,
 // votes and this player's own vote — pending ones included for maps not on
 // the site yet (isOnSite: false).
 router.get('/plugin/room-maps', async (req, res) => {
+  const which = resolveRoom(req.query.club, req.query.room);
+  if (!which) return res.status(400).json({ error: 'unknown_room' });
   let result;
   try {
-    result = await getRoomMaps(req.query.accountId || null);
+    result = await getRoomMaps(which, req.query.accountId || null);
   } catch (e) {
     console.error('[plugin/room-maps]', String(e));
     return res.status(502).json({ error: 'room_unavailable' });
@@ -43,14 +46,15 @@ router.get('/plugin/room-maps', async (req, res) => {
   res.json(result);
 });
 
-// POST /api/plugin/vote { token, mapUid, value } — the plugin's "+".
+// POST /api/plugin/vote { token, mapUid, value[, club, room] } — the plugin's
+// "+"; club/room name the room the map is in, as for room-maps.
 // `token` is a fresh Openplanet Auth::GetToken() token, checked on every
 // vote: votes are rare, and it spares the plugin keeping a session of its
 // own. A catalog map votes like POST /api/vote; a map that's only in the
 // fest room so far parks the vote in pending_votes until the catalog sync
 // brings the map in (services/votes.js resolvePendingVotes).
 router.post('/plugin/vote', async (req, res) => {
-  const { token, mapUid, value } = req.body || {};
+  const { token, mapUid, value, club, room } = req.body || {};
   if (!mapUid || typeof mapUid !== 'string') return res.status(400).json({ error: 'missing_mapUid' });
   const wantVote = value === true;
 
@@ -70,7 +74,9 @@ router.post('/plugin/vote', async (req, res) => {
   if (wantVote) {
     let inRoom;
     try {
-      inRoom = await isInRoom(mapUid);
+      const which = resolveRoom(club, room);
+      if (!which) return res.status(400).json({ error: 'unknown_room' });
+      inRoom = await isInRoom(which, mapUid);
     } catch (e) {
       console.error('[plugin/vote]', String(e));
       return res.status(502).json({ error: 'room_unavailable' });

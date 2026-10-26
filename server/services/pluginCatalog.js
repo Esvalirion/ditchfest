@@ -202,9 +202,9 @@ async function getPluginRecords(accountId) {
  *  shouldn't mark "next" from the list order.
  *  Strings are never null (AngelScript's Json reads are happier that way).
  *  Returns null for a malformed accountId. */
-async function getRoomMaps(accountId) {
+async function getRoomMaps(which, accountId) {
   if (accountId && !ACCOUNT_ID_RE.test(accountId)) return null;
-  const room = await getRoom();
+  const room = await getRoom(which);
   const uids = room.maps.map((m) => m.mapUid);
   const pendingReady = await isPendingVotesReady();
 

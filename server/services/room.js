@@ -8,13 +8,22 @@
 // brings those maps in. So while the room runs, its maps are not in `maps`:
 // names come from here, votes wait in pending_votes (services/votes.js) and
 // move over on the first sync that sees the campaign.
-const { TM_API_URL, DF_ROOM_CLUB_ID, DF_ROOM_ID } = require('../config');
+const { TM_API_URL, PLUGIN_ROOMS } = require('../config');
 
-/** { name, running, joinLink, serverLogin, playerCount,
+/** The room a request asks about: ?club=&room= when that pair is allowed
+ *  (config PLUGIN_ROOMS), the fest room when both are absent, else null —
+ *  tm-api's Nadeo account isn't a public proxy for any club's rooms. */
+function resolveRoom(club, room) {
+  if (club == null && room == null) return PLUGIN_ROOMS[0];
+  return PLUGIN_ROOMS.find((r) => r.club === Number(club) && r.room === Number(room)) || null;
+}
+
+/** { name, running, joinLink, serverLogin, playerCount, shuffle,
  *    maps: [{ mapUid, name, rawName, author, authorAccountId }] }
- *  Throws when tm-api is unreachable or Nadeo failed. */
-async function getRoom() {
-  const res = await fetch(`${TM_API_URL}/live/club/${DF_ROOM_CLUB_ID}/room/${DF_ROOM_ID}`);
+ *  for a resolveRoom() result. Throws when tm-api is unreachable or Nadeo
+ *  failed. */
+async function getRoom({ club, room: roomId }) {
+  const res = await fetch(`${TM_API_URL}/live/club/${club}/room/${roomId}`);
   if (!res.ok) throw new Error(`tm-api room -> HTTP ${res.status}`);
   const room = await res.json();
   // joinLink is "#qjoin=<serverLogin>"; the plugin compares the login with
@@ -25,9 +34,9 @@ async function getRoom() {
 
 /** Is this map in the room's current playlist? A pending vote is only
  *  accepted for those — otherwise anyone could park votes on any uid. */
-async function isInRoom(mapUid) {
-  const room = await getRoom();
+async function isInRoom(which, mapUid) {
+  const room = await getRoom(which);
   return room.maps.some((m) => m.mapUid === mapUid);
 }
 
-module.exports = { getRoom, isInRoom };
+module.exports = { resolveRoom, getRoom, isInRoom };

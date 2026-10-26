@@ -34,9 +34,13 @@ module.exports = {
   // openplanet.dev. Empty = plugin login answers 503.
   OPENPLANET_AUTH_SECRET: process.env.OPENPLANET_AUTH_SECRET || '',
 
-  // Shared Nadeo gateway on tm-network (trackmania/tm-api) and the fest club
-  // room the plugin shows (services/room.js). Not secrets.
+  // Shared Nadeo gateway on tm-network (trackmania/tm-api) and the club rooms
+  // the plugin may ask about (services/room.js), "club:room" pairs. The first
+  // is the default — the DITCHFEST fest room; the second is the Openplanet
+  // School room the plugin's developer builds use. Not secrets.
   TM_API_URL: process.env.TM_API_URL || 'http://tm-api-svc:3002',
-  DF_ROOM_CLUB_ID: Number(process.env.DF_ROOM_CLUB_ID || 52818),
-  DF_ROOM_ID: Number(process.env.DF_ROOM_ID || 316252),
+  PLUGIN_ROOMS: (process.env.PLUGIN_ROOMS || '52818:316252,70151:635523')
+    .split(',')
+    .map((pair) => pair.split(':').map(Number))
+    .map(([club, room]) => ({ club, room })),
 };
