@@ -14,9 +14,9 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 Расхождения с оригиналом ниже помечены явно — это не баги, а осознанные
 решения при переносе.
 
-## Статус (2026-10-24)
+## Статус (2026-10-26)
 
-- Работает в проде (`df.esvalirion.tech`, `ditchfest.su`). Последнее: API для плагина Ditchfest Maps (`routes/plugin.js`), знак маппера для esvalirion, Umami. Не закоммичен 1 файл.
+- Работает в проде (`df.esvalirion.tech`, `ditchfest.su`). Последнее: API для плагина Ditchfest (`routes/plugin.js`): `room-maps` (плейлист комнаты с названиями, авторами, голосами) и `login` (Openplanet Auth → JWT сайта, дальше обычный `POST /api/vote`). Секрет `OPENPLANET_AUTH_SECRET` в `/opt/ditchfest-signs/.env` на VPS.
 
 ## Стек
 
