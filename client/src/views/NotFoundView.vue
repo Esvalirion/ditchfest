@@ -32,6 +32,9 @@ const route = useRoute();
   width: 100%;
   height: auto;
   margin: 0 auto 8px;
+  /* The page sits on the dimmed bckgr2.png, not a flat colour, so any hard
+     image edge shows as a box: fade the art out to transparent instead. */
+  mask-image: radial-gradient(ellipse 50% 50% at center, #000 70%, transparent 100%);
 }
 
 h1 {
