@@ -8,6 +8,7 @@ import { ref, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { track } from '../utils/analytics';
+import { playInGameUrl, PLAY_HINT } from '../utils/playInGame';
 import { useSessionStore } from '../stores/session';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
 import { useParallax } from '../utils/parallax';
@@ -177,6 +178,12 @@ watch(() => route.params.mapUid, load, { immediate: true });
 
         <div class="map-card-foot">
         <div class="map-links">
+          <a
+            class="map-link-btn map-link-btn-play"
+            :href="playInGameUrl(map.mapUid)"
+            :title="PLAY_HINT"
+            @click="track('map-play')"
+          >▶ Play in game</a>
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
           <!-- Confirmed absence → link to the community list where the map can
@@ -392,6 +399,11 @@ watch(() => route.params.mapUid, load, { immediate: true });
 .map-link-btn:hover {
   border: 1px solid var(--color-text-bright);
   background: var(--color-bg);
+}
+
+.map-link-btn-play {
+  border-color: var(--color-text-bright);
+  font-weight: 600;
 }
 
 .map-link-btn-disabled {

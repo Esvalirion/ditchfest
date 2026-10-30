@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
 import { fetchTmxId } from '../utils/tmxId';
+import { playInGameUrl, PLAY_HINT } from '../utils/playInGame';
 import { track } from '../utils/analytics';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
@@ -111,10 +112,21 @@ function onThumbError(e) {
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>
     <div class="row-actions" :class="{ always: actionsVisibility === 'always' }">
-      <!-- Default cluster: download link + copy TMX id. Pages with their own
+      <!-- Default cluster: play in game + download link + copy TMX id. Pages with their own
            action set (Missing on TMX passes recheck + download) replace it
            wholesale via the actions slot. -->
       <slot name="actions">
+        <a
+          class="icon-btn"
+          :href="playInGameUrl(map.mapUid)"
+          :title="PLAY_HINT"
+          :aria-label="PLAY_HINT"
+          @click="track('map-play')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 4.5v15l12-7.5z" />
+          </svg>
+        </a>
         <a
           class="icon-btn"
           :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
@@ -184,7 +196,7 @@ function onThumbError(e) {
   min-width: 0;
 }
 
-/* Hover actions (the slot's default: download + copy TMX id). Hidden until
+/* Hover actions (the slot's default: play + download + copy TMX id). Hidden until
    the row is hovered on pointer devices, always visible on touch (there is no
    hover to reveal them), via keyboard (:focus-within), and whenever the
    caller passes actions-visibility="always". */
