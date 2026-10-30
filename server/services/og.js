@@ -206,7 +206,7 @@ async function bestMapThumb(members) {
  *  alongside the real card image. Returns the rewritten HTML, or the input
  *  unchanged if no <title> and no </head> are found. */
 function injectOg(html, { title, description, image, url, origin }) {
-  const cardImage = image || `${origin}/res/og-default.png`;
+  const cardImage = image || `${origin}/res/og-default.jpg`;
   const ogTitle = escapeHtml(title);
   const ogDesc = escapeHtml(description || SITE_DESCRIPTION);
   const ogUrl = escapeHtml(url || origin);

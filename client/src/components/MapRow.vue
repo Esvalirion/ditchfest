@@ -107,7 +107,7 @@ function onThumbError(e) {
       @error="onThumbError"
     />
     <div class="map-info">
-      <RouterLink class="map-name" :to="{ name: 'map', params: { mapUid: map.mapUid } }">{{ map.name }}</RouterLink>
+      <RouterLink class="map-name" :title="map.name" :to="{ name: 'map', params: { mapUid: map.mapUid } }">{{ map.name }}</RouterLink>
       <div class="map-author">{{ subtitle }}</div>
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>

@@ -133,7 +133,9 @@ load();
             <span class="vg-count">{{ edition.maps.length }} maps</span>
           </button>
 
-          <div class="vote-group-body">
+          <!-- v-if, not just the CSS toggle: ~2000 hidden rows would still be
+               ~37k DOM nodes on every visit, most of them never opened. -->
+          <div v-if="edition._open" class="vote-group-body">
             <MapRow
               v-for="map in edition.maps"
               :key="map.mapUid"
@@ -228,12 +230,7 @@ load();
 }
 
 .vote-group-body {
-  display: none;
   border-top: 1px solid var(--color-border-subtle);
-}
-
-.vote-group.open .vote-group-body {
-  display: block;
 }
 
 /* "Top Maps" reuses the edition group chrome with no header; each row gets a

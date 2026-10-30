@@ -67,6 +67,8 @@ const routes = [
     component: () => import('../views/AdminLinksView.vue'),
     meta: { navGroup: 'admin' },
   },
+  // Last: anything unmatched gets the 404 page instead of an empty view.
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') },
 ];
 
 export default createRouter({

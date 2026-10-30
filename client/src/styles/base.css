@@ -211,6 +211,9 @@ a.filter-btn {
 }
 
 .map-name {
+  /* block: text-overflow does nothing on an inline box, so a long name would
+     run past .map-info into the row's action buttons instead of getting "…" */
+  display: block;
   color: inherit;
   font-size: 0.95rem;
   white-space: nowrap;

@@ -11,6 +11,7 @@ const {
   injectOg,
 } = require('./services/og');
 const { injectAnalytics } = require('./services/analytics');
+const { robotsTxt, sitemapXml } = require('./services/seo');
 
 const app = express();
 
@@ -20,9 +21,42 @@ const app = express();
 // would then send TM OAuth an http:// callback that doesn't match what's
 // registered on the OAuth app.
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+// Baseline security headers for every response. No CSP yet: the page pulls
+// Umami, Nadeo/TMX thumbnails and canvas exports from several origins, and a
+// too-tight policy would silently break Sign Studio. HSTS without
+// includeSubDomains, so it pins only this host, not the rest of esvalirion.tech.
+app.use((_req, res, next) => {
+  res.set({
+    'Strict-Transport-Security': 'max-age=15552000',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+  });
+  next();
+});
 
 app.use(express.json());
 app.use(router);
+
+// An unknown /api or /auth path is a client bug, not a page: answer JSON 404
+// instead of falling through to the SPA's index.html with a 200.
+app.use(['/api', '/auth'], (_req, res) => {
+  res.status(404).json({ error: 'not_found' });
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(robotsTxt(`${req.protocol}://${req.get('host')}`));
+});
+
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    res.type('application/xml').send(await sitemapXml(`${req.protocol}://${req.get('host')}`));
+  } catch (e) {
+    next(e);
+  }
+});
 
 // Serve the built Vue client in production (Docker); skipped in local dev,
 // where the client runs its own Vite dev server and proxies /api + /auth
@@ -47,7 +81,16 @@ if (SERVES_CLIENT) {
   // would be served raw, bypassing the OG injection and leaking the relative
   // og:image baked into index.html. Asset paths (/assets/*, /res/*, /Signs/*)
   // are unaffected: they still resolve to files here as before.
-  app.use(express.static(PUBLIC, { index: false }));
+  // Vite puts a content hash in every /assets/* filename, so those can be
+  // cached for a year; everything else (res/, Signs/) keeps revalidating.
+  app.use(express.static(PUBLIC, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.startsWith(path.join(PUBLIC, 'assets') + path.sep)) {
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
 
   // Rich previews (Discord/Telegram/Slack/Twitter). Crawlers don't run JS, so
   // a Vue SPA's <head> is empty for them — here we inject OG/Twitter meta tags
