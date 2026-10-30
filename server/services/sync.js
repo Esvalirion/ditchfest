@@ -22,7 +22,8 @@ const { lookupMapByUid } = require('./tmx');
 const { getAppToken, resolveDisplayNames } = require('./names');
 const { refreshEveryone } = require('./grants');
 const { resolvePendingVotes, isPendingVotesReady } = require('./votes');
-const { TM_CLUB_ID, TM_FOLDER_ID, TMIO_USER_AGENT } = require('../config');
+const { applyLatest } = require('./latest');
+const { TM_CLUB_ID, TM_FOLDER_ID, TM_LATEST_CAMPAIGN_ID, TMIO_USER_AGENT } = require('../config');
 
 // Every run refreshes a bounded batch so we never burst through trackmania.io's
 // rate limit. The batch is filled by priority: (1) editions with no maps yet,
@@ -116,6 +117,21 @@ async function syncCatalog() {
     campaignsFetched++;
   }
 
+  // File the current fest's maps from "Ditchfest latest" into their own
+  // edition (services/latest.js). Skipped after a rate-limit stop: the newest
+  // campaigns may not be refreshed yet, and the next run comes soon anyway.
+  let latest = null;
+  if (TM_LATEST_CAMPAIGN_ID && !stoppedEarly) {
+    try {
+      await sleep(REQUEST_DELAY_MS);
+      latest = await applyLatest(await fetchCampaignMaps(clubId, Number(TM_LATEST_CAMPAIGN_ID), ua));
+      if (latest.moved || latest.inserted || latest.demoted) console.log('auto-latest:', JSON.stringify(latest));
+    } catch (e) {
+      console.error('sync: auto-latest failed', String(e));
+      latest = { error: String(e) };
+    }
+  }
+
   // Fest votes cast in the room before this edition's campaign existed:
   // now that its maps may be in, move them into `votes` — before the
   // achievement sweep below, so badges see them.
@@ -199,6 +215,7 @@ async function syncCatalog() {
     campaignsFetched,
     mapsUpserted,
     neverSynced,
+    latest,
     pendingVotesResolved,
     namesResolved,
     tmxStylesRefreshed,

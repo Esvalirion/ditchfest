@@ -49,6 +49,7 @@ psql -d postgres -f server/db/007_map_styles.sql
 psql -d postgres -f server/db/008_map_coauthors.sql
 psql -d postgres -f server/db/009_player_records.sql
 psql -d postgres -f server/db/010_pending_votes.sql
+psql -d postgres -f server/db/011_auto_latest.sql
 
 # Бэкенд
 cd server

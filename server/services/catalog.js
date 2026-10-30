@@ -68,10 +68,13 @@ async function getSyncedCampaignIds() {
 }
 
 /** Campaign IDs of already-synced editions, least- to most-recently-refreshed
- *  — used to rotate map refreshes across ALL editions over time. */
+ *  — used to rotate map refreshes across ALL editions over time. Negative ids
+ *  are folders holding maps services/latest.js inserted before any real
+ *  campaign had them; there's nothing on trackmania.io to refresh there. */
 async function getStalestCampaignIds(limit) {
   const { rows } = await pool.query(
     `SELECT campaign_id, MAX(updated_at) AS last FROM maps
+     WHERE campaign_id > 0
      GROUP BY campaign_id ORDER BY last ASC LIMIT $1`,
     [limit]
   );

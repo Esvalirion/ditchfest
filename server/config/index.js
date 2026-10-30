@@ -24,6 +24,9 @@ module.exports = {
   // folder inside it holding the DF campaigns, not secrets.
   TM_CLUB_ID: process.env.TM_CLUB_ID || '',
   TM_FOLDER_ID: process.env.TM_FOLDER_ID || '',
+  // The club's "Ditchfest latest" campaign (106540), refilled with each fest's
+  // maps; services/latest.js files them into their own edition. Empty = off.
+  TM_LATEST_CAMPAIGN_ID: process.env.TM_LATEST_CAMPAIGN_ID || '',
   TMIO_USER_AGENT: process.env.TMIO_USER_AGENT || 'ditchfest / contact@example.com',
   // Guards the manual POST /api/sync trigger (X-Sync-Secret header) — the
   // cron-scheduled run doesn't need it, only the manual one does.

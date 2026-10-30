@@ -14,8 +14,9 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 Расхождения с оригиналом ниже помечены явно — это не баги, а осознанные
 решения при переносе.
 
-## Статус (2026-10-26)
+## Статус (2026-10-30)
 
+- Авто-эдишен из «Ditchfest latest» (`services/latest.js`, миграция `011_auto_latest.sql`, env `TM_LATEST_CAMPAIGN_ID=106540`): написан и проверен локально (19 сценариев на копии реальных данных + полный синк с моком trackmania.io), **не задеплоен**: нужны миграция 011 на VPS и строка в `/opt/ditchfest-signs/.env`.
 - Работает в проде (`df.esvalirion.tech`, `ditchfest.su`). Последнее: API для плагина Ditchfest (`routes/plugin.js`): `room-maps` (плейлист комнаты с названиями, авторами, голосами) `vote` (токен Openplanet Auth в теле, проверяется на каждый голос) `random` (одна случайная карта из видимых эдишенов) и `fest` (`isFestDay`, следующий старт и текст баннера, `services/fest.js`, опорная пятница та же, что `FEST_ANCHOR` в `HomeView.vue`). Секрет `OPENPLANET_AUTH_SECRET` в `/opt/ditchfest-signs/.env` на VPS.
 - Плагин и фест-рума (2026-10-26): `GET /api/plugin/room-maps?accountId=` читает руму через tm-api (`/live/club/:club/room/:room`, клуб/рума в `DF_ROOM_*`), отдаёт плейлист с голосами. Булевы поля в эндпоинтах плагина с `is`/`has` (`isRunning`, `isShuffled`, `hasVoted`, `isOnSite`, `isFestDay`), старые поля сайта и `/plugin/maps` без префикса не трогаем. `POST /api/plugin/vote`: карта на сайте → обычный голос, карта только в руме → `pending_votes` (миграция 010). Порядок на фесте: рума с картами без кампании → после феста админ создаёт кампанию → sync забирает карты и `resolvePendingVotes` переносит голоса в `votes` (старше 30 дней чистятся).
 
@@ -97,6 +98,7 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 | `services/achievements.js` | каталог ачивок + `earnedFromStats()` |
 | `services/grants.js` | выдача статистических ачивок (`refreshAccount`, `refreshEveryone`) |
 | `services/sync.js`, `tmio.js`, `catalog.js` | синк каталога с trackmania.io каждые 30 мин; `tmio.js` также отдаёт топ-5 таймов карты для `routes/map.js` |
+| `services/latest.js` | после синка раскладывает карты текущего феста из клубной кампании «Ditchfest latest» в виртуальную папку «#N» (см. «Авто-эдишен из latest») |
 | `services/tmx.js` | поиск карты на Trackmania Exchange по `map_uid` + её стиль/теги (StyleName + раскрытие числовых ID тегов через кешируемую таблицу `/api/meta/tags`) — best-effort, не все карты там есть |
 | `services/names.js` | accountId → ник через TM OAuth (client credentials) |
 | `db.js` | `pg.Pool`, `DATABASE_URL` |
@@ -158,6 +160,29 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 **Грабли: у trackmania.io мягкий рейт-лимит (~2 req/s).** Ручные повторные
 прогоны подряд (чаще раз в минуту) словят `sync_failed` — это не баг кода,
 подождать хотя бы 60 секунд между ручными прогонами.
+
+
+## Авто-эдишен из «Ditchfest latest» (`services/latest.js`)
+
+Админы клуба кладут карты каждого феста в кампанию «Ditchfest latest»
+(`TM_LATEST_CAMPAIGN_ID=106540`, корень клуба, не в папке синка), а в папку
+потом добавляют их в уже существующую кампанию («DITCHFEST 134-135») или
+вообще не сразу. Шаг после синка делает то же, что раньше админ руками для
+#133: виртуальная папка «#N» + `display_campaign_id`. Карты, которых ещё нет
+ни в одной кампании, вставляются прямо в папку (`campaign_id` = id папки),
+синк потом перезапишет `campaign_id` на настоящий, override держит их в папке.
+
+Подстраховки (всё, в чём не уверен, — не трогает): выключен без
+`TM_LATEST_CAMPAIGN_ID` и без миграции 011; N — номер «DF<n>» большинством
+(≥3 карт и ≥2/3 пронумерованных), иначе ничего; N должен быть новее всех
+остальных DF-номеров на сайте (устаревший latest ничего не двигает); двигает
+только карты 3 новейших реальных кампаний, без override, и только из
+смешанной кампании; каждая карта обрабатывается один раз (`auto_latest_maps`),
+поэтому вернувшего карту админа не перебивает; удалённую админом папку не
+пересоздаёт (`auto_latest_editions`). Карта, вставленная шагом и пропавшая из
+latest до попадания в реальную кампанию (замена с новым uid), удаляется, её
+голоса уходят обратно в `pending_votes`; если так выходит больше половины
+папки — не трогает. Одна транзакция + advisory lock.
 
 ## Стили карт с TMX (`services/tmx.js`, `services/editions.js`, `routes/map.js`)
 
