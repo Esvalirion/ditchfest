@@ -239,4 +239,24 @@ function onThumbError(e) {
   padding: 6px 12px;
   font-size: 0.9rem;
 }
+
+/* Phones: three icon actions + the vote button next to the name left the
+   name a few characters wide ("DF12…"). The actions drop to their own line
+   under the name, thumb and vote stay vertically centred on the whole row. */
+@media (max-width: 560px) {
+  .map-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'thumb info vote'
+      'thumb actions vote';
+    column-gap: 12px;
+    row-gap: 6px;
+  }
+  .map-thumb { grid-area: thumb; align-self: center; }
+  .map-info { grid-area: info; }
+  .row-actions { grid-area: actions; }
+  .row-actions:empty { display: none; }
+  .vote-btn-sm { grid-area: vote; align-self: center; }
+}
 </style>
