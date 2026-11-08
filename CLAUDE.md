@@ -74,7 +74,12 @@ nginx-блока — см. `redirectUri()`/`frontendBase()` в `routes/auth.js`,
 `MapRow.vue` — общая строка карты. Пропы: `votable: false` прячет кнопку
 голосования (страница Missing on TMX), `actionsVisibility: 'hover' | 'always'`
 управляет показом кластера действий, слот `#actions` заменяет дефолтный набор
-(download + copy TMX id) своим.
+(play + copy TMX id + download) своим. Copy TMX id есть только у карт на TMX:
+id лениво берётся из `/api/map/:uid/tmx` (`utils/tmxId.js`) при наведении
+на строку, а на тач-устройствах (`hover: none`) при появлении строки в
+экране (IntersectionObserver). На странице карты кнопка «Copy TMX ID» рядом
+с Play in game, id приходит в `/api/map/:uid` полем `tmxId`. Копирование:
+`utils/clipboard.js` `copyText()`.
 
 ## Карта модулей (`server/`)
 

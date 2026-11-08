@@ -132,6 +132,7 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     onTmx,
     tmioUrl: `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`,
     tmxUrl: tmx && tmx.url,
+    tmxId: tmx ? tmx.trackId : null,
     leaderboard: leaderboard || [],
     coauthors,
   });

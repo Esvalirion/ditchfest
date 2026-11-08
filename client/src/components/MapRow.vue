@@ -4,11 +4,12 @@
      `voted` (its own myVotes Set) and gets an update via @voted; this
      component only knows about a single row. -->
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
 import { fetchTmxId } from '../utils/tmxId';
+import { copyText } from '../utils/clipboard';
 import { playInGameUrl, PLAY_HINT } from '../utils/playInGame';
 import { track } from '../utils/analytics';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
@@ -29,40 +30,45 @@ const emit = defineEmits(['voted']);
 
 const session = useSessionStore();
 
-// The TMX id for the "copy id" action — unknown (undefined) until the row is
-// first hovered, then a number, or null when the map isn't on TMX (fetch
-// failures read the same way: no button, which is the safe degradation).
+// The TMX id for the "copy id" action — unknown (undefined) until looked up,
+// then a number, or null when the map isn't on TMX (fetch failures read the
+// same way: no button, which is the safe degradation). Mouse devices look it
+// up on first hover of the row, so scrolling a long list doesn't fire a TMX
+// lookup per row. Touch devices have no hover, so there the row asks once it
+// scrolls into view — otherwise the button would never appear on a phone.
 const tmxId = ref(undefined);
 const copied = ref(false);
+const rowEl = ref(null);
 let copiedTimer = null;
+let observer = null;
 
-function onRowEnter() {
+function loadTmxId() {
   if (tmxId.value === undefined) fetchTmxId(props.map.mapUid).then((id) => (tmxId.value = id));
 }
 
+onMounted(() => {
+  const isTouch = window.matchMedia && window.matchMedia('(hover: none)').matches;
+  if (!isTouch || !('IntersectionObserver' in window) || !rowEl.value) return;
+  observer = new IntersectionObserver((entries) => {
+    if (!entries.some((e) => e.isIntersecting)) return;
+    loadTmxId();
+    observer.disconnect();
+    observer = null;
+  });
+  observer.observe(rowEl.value);
+});
+
+onBeforeUnmount(() => {
+  if (observer) observer.disconnect();
+  clearTimeout(copiedTimer);
+});
+
 async function copyTmxId() {
-  const text = String(tmxId.value);
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      // http fallback (dev / non-TLS mirror): the hidden-textarea classic.
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-    }
-    copied.value = true;
-    track('copy-tmx-id');
-    clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => (copied.value = false), 1500);
-  } catch (e) {
-    // Clipboard denied — leave the button as it was, nothing to fall back to.
-  }
+  if (!(await copyText(String(tmxId.value)))) return;
+  copied.value = true;
+  track('copy-tmx-id');
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => (copied.value = false), 1500);
 }
 
 async function toggleVote() {
@@ -94,7 +100,7 @@ function onThumbError(e) {
 </script>
 
 <template>
-  <div class="map-row" @mouseenter="onRowEnter">
+  <div ref="rowEl" class="map-row" @mouseenter="loadTmxId" @focusin="loadTmxId">
     <img
       v-if="map.thumbnailUrl"
       class="map-thumb"
@@ -112,7 +118,8 @@ function onThumbError(e) {
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>
     <div class="row-actions" :class="{ always: actionsVisibility === 'always' }">
-      <!-- Default cluster: play in game + download link + copy TMX id. Pages with their own
+      <!-- Default cluster: play in game + copy TMX id (only when the map is on
+           TMX) + download link. Pages with their own
            action set (Missing on TMX passes recheck + download) replace it
            wholesale via the actions slot. -->
       <slot name="actions">
@@ -125,19 +132,6 @@ function onThumbError(e) {
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M7 4.5v15l12-7.5z" />
-          </svg>
-        </a>
-        <a
-          class="icon-btn"
-          :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
-          target="_blank"
-          rel="noopener"
-          title="Download on trackmania.io"
-          aria-label="Download on trackmania.io"
-          @click="track('map-download')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
           </svg>
         </a>
         <button
@@ -155,6 +149,19 @@ function onThumbError(e) {
             <path d="m4 12.5 5 5L20 6.5" />
           </svg>
         </button>
+        <a
+          class="icon-btn"
+          :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
+          target="_blank"
+          rel="noopener"
+          title="Download on trackmania.io"
+          aria-label="Download on trackmania.io"
+          @click="track('map-download')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
+          </svg>
+        </a>
       </slot>
     </div>
     <button
@@ -196,7 +203,7 @@ function onThumbError(e) {
   min-width: 0;
 }
 
-/* Hover actions (the slot's default: play + download + copy TMX id). Hidden until
+/* Hover actions (the slot's default: play + copy TMX id + download). Hidden until
    the row is hovered on pointer devices, always visible on touch (there is no
    hover to reveal them), via keyboard (:focus-within), and whenever the
    caller passes actions-visibility="always". */

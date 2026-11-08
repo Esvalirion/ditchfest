@@ -9,6 +9,7 @@ import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { track } from '../utils/analytics';
 import { playInGameUrl, PLAY_HINT } from '../utils/playInGame';
+import { copyText } from '../utils/clipboard';
 import { useSessionStore } from '../stores/session';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
 import { useParallax } from '../utils/parallax';
@@ -20,6 +21,16 @@ const session = useSessionStore();
 const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const map = ref(null);
 const votePending = ref(false);
+const tmxIdCopied = ref(false);
+let tmxIdCopiedTimer = null;
+
+async function copyTmxId() {
+  if (!(await copyText(String(map.value.tmxId)))) return;
+  tmxIdCopied.value = true;
+  track('copy-tmx-id');
+  clearTimeout(tmxIdCopiedTimer);
+  tmxIdCopiedTimer = setTimeout(() => (tmxIdCopied.value = false), 1500);
+}
 
 // The map card uses the thumbnail as a drifting parallax background, same idea
 // as the latest-edition panel on the home page. mapCard anchors the cursor math.
@@ -184,6 +195,16 @@ watch(() => route.params.mapUid, load, { immediate: true });
             :title="PLAY_HINT"
             @click="track('map-play')"
           >▶ Play in game</a>
+          <!-- Only when the live TMX lookup found the map (same condition as the
+               Trackmania Exchange link below). -->
+          <button
+            v-if="map.tmxUrl && map.tmxId != null"
+            type="button"
+            class="map-link-btn"
+            :class="{ 'map-link-btn-ok': tmxIdCopied }"
+            :title="`Copy TMX id (${map.tmxId})`"
+            @click="copyTmxId"
+          >{{ tmxIdCopied ? '✓ Copied' : `Copy TMX ID · ${map.tmxId}` }}</button>
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
           <!-- Confirmed absence → link to the community list where the map can
@@ -399,6 +420,18 @@ watch(() => route.params.mapUid, load, { immediate: true });
 .map-link-btn:hover {
   border: 1px solid var(--color-text-bright);
   background: var(--color-bg);
+}
+
+button.map-link-btn {
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.map-link-btn-ok,
+.map-link-btn-ok:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .map-link-btn-play {
