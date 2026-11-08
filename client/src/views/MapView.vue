@@ -4,7 +4,7 @@
      Route is /map/:mapUid — this is where MapRow's map name links now,
      instead of redirecting straight to trackmania.io. -->
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { api } from '../utils/api';
 import { track } from '../utils/analytics';
@@ -21,15 +21,20 @@ const session = useSessionStore();
 const state = ref('loading'); // 'loading' | 'not-found' | 'error' | 'ready'
 const map = ref(null);
 const votePending = ref(false);
-const tmxIdCopied = ref(false);
-let tmxIdCopiedTimer = null;
+const idCopied = ref(false);
+let idCopiedTimer = null;
 
-async function copyTmxId() {
-  if (!(await copyText(String(map.value.tmxId)))) return;
-  tmxIdCopied.value = true;
-  track('copy-tmx-id');
-  clearTimeout(tmxIdCopiedTimer);
-  tmxIdCopiedTimer = setTimeout(() => (tmxIdCopied.value = false), 1500);
+// TMX id when the live lookup found the map, the map UID otherwise (not on TMX
+// or TMX unreachable) — every map gets a copy button.
+const hasTmxId = computed(() => !!(map.value && map.value.tmxUrl && map.value.tmxId != null));
+
+async function copyId() {
+  const text = hasTmxId.value ? String(map.value.tmxId) : map.value.mapUid;
+  if (!(await copyText(text))) return;
+  idCopied.value = true;
+  track(hasTmxId.value ? 'copy-tmx-id' : 'copy-map-uid');
+  clearTimeout(idCopiedTimer);
+  idCopiedTimer = setTimeout(() => (idCopied.value = false), 1500);
 }
 
 // The map card uses the thumbnail as a drifting parallax background, same idea
@@ -195,16 +200,15 @@ watch(() => route.params.mapUid, load, { immediate: true });
             :title="PLAY_HINT"
             @click="track('map-play')"
           >▶ Play in game</a>
-          <!-- Only when the live TMX lookup found the map (same condition as the
-               Trackmania Exchange link below). -->
+          <!-- TMX id when the live TMX lookup found the map (same condition as
+               the Trackmania Exchange link below), the map UID otherwise. -->
           <button
-            v-if="map.tmxUrl && map.tmxId != null"
             type="button"
             class="map-link-btn"
-            :class="{ 'map-link-btn-ok': tmxIdCopied }"
-            :title="`Copy TMX id (${map.tmxId})`"
-            @click="copyTmxId"
-          >{{ tmxIdCopied ? '✓ Copied' : `Copy TMX ID · ${map.tmxId}` }}</button>
+            :class="{ 'map-link-btn-ok': idCopied }"
+            :title="hasTmxId ? `Copy TMX ID (${map.tmxId})` : `Copy map UID (${map.mapUid})`"
+            @click="copyId"
+          >{{ idCopied ? '✓ Copied' : hasTmxId ? `Copy TMX ID · ${map.tmxId}` : 'Copy UID' }}</button>
           <a class="map-link-btn" :href="map.tmioUrl" target="_blank" rel="noopener">Trackmania.io</a>
           <a v-if="map.tmxUrl" class="map-link-btn" :href="map.tmxUrl" target="_blank" rel="noopener">Trackmania Exchange</a>
           <!-- Confirmed absence → link to the community list where the map can

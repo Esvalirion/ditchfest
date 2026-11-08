@@ -4,7 +4,7 @@
      `voted` (its own myVotes Set) and gets an update via @voted; this
      component only knows about a single row. -->
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useSessionStore } from '../stores/session';
 import { api } from '../utils/api';
@@ -30,9 +30,10 @@ const emit = defineEmits(['voted']);
 
 const session = useSessionStore();
 
-// The TMX id for the "copy id" action — unknown (undefined) until looked up,
-// then a number, or null when the map isn't on TMX (fetch failures read the
-// same way: no button, which is the safe degradation). Mouse devices look it
+// The TMX id for the "copy id" action — unknown (undefined) until looked up
+// (and again after a failed lookup: no button, retried on the next hover),
+// then a number, or null when the map isn't on TMX — then the button copies
+// the map UID instead, the one id every map has. Mouse devices look it
 // up on first hover of the row, so scrolling a long list doesn't fire a TMX
 // lookup per row. Touch devices have no hover, so there the row asks once it
 // scrolls into view — otherwise the button would never appear on a phone.
@@ -63,10 +64,18 @@ onBeforeUnmount(() => {
   clearTimeout(copiedTimer);
 });
 
-async function copyTmxId() {
-  if (!(await copyText(String(tmxId.value)))) return;
+// What the copy button copies: TMX id when the map is on TMX, map UID otherwise.
+const copyTarget = computed(() => {
+  if (tmxId.value === undefined) return null;
+  if (tmxId.value === null) return { text: props.map.mapUid, label: 'map UID', event: 'copy-map-uid' };
+  return { text: String(tmxId.value), label: `TMX ID ${tmxId.value}`, event: 'copy-tmx-id' };
+});
+
+async function copyId() {
+  const t = copyTarget.value;
+  if (!t || !(await copyText(t.text))) return;
   copied.value = true;
-  track('copy-tmx-id');
+  track(t.event);
   clearTimeout(copiedTimer);
   copiedTimer = setTimeout(() => (copied.value = false), 1500);
 }
@@ -118,8 +127,8 @@ function onThumbError(e) {
       <StyleTags :style="map.style" :tags="map.tags" :on-tmx="map.onTmx" />
     </div>
     <div class="row-actions" :class="{ always: actionsVisibility === 'always' }">
-      <!-- Default cluster: play in game + copy TMX id (only when the map is on
-           TMX) + download link. Pages with their own
+      <!-- Default cluster: play in game + copy id (TMX id when the map is on
+           TMX, map UID otherwise) + download link. Pages with their own
            action set (Missing on TMX passes recheck + download) replace it
            wholesale via the actions slot. -->
       <slot name="actions">
@@ -135,12 +144,12 @@ function onThumbError(e) {
           </svg>
         </a>
         <button
-          v-if="tmxId != null"
+          v-if="copyTarget"
           class="icon-btn"
           :class="{ ok: copied }"
-          :title="copied ? 'Copied!' : `Copy TMX id (${tmxId})`"
-          :aria-label="copied ? 'TMX id copied' : 'Copy TMX id'"
-          @click="copyTmxId"
+          :title="copied ? `Copied ${copyTarget.label}` : `Copy ${copyTarget.label}`"
+          :aria-label="copied ? `${copyTarget.label} copied` : `Copy ${copyTarget.label}`"
+          @click="copyId"
         >
           <svg v-if="!copied" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
@@ -203,7 +212,7 @@ function onThumbError(e) {
   min-width: 0;
 }
 
-/* Hover actions (the slot's default: play + copy TMX id + download). Hidden until
+/* Hover actions (the slot's default: play + copy id + download). Hidden until
    the row is hovered on pointer devices, always visible on touch (there is no
    hover to reveal them), via keyboard (:focus-within), and whenever the
    caller passes actions-visibility="always". */

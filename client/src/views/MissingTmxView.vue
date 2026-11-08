@@ -5,6 +5,8 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { api } from '../utils/api';
+import { copyText } from '../utils/clipboard';
+import { track } from '../utils/analytics';
 import MapRow from '../components/MapRow.vue';
 
 const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
@@ -60,6 +62,15 @@ async function recheck(m) {
       setTimeout(() => (m._recheck = null), 1500);
     }
   }
+}
+
+// Every map here is off TMX by definition, so the copy button is the map UID
+// (MapRow's default cluster would pick the same; this page replaces it).
+async function copyUid(m) {
+  if (!(await copyText(m.mapUid))) return;
+  track('copy-map-uid');
+  m._copied = true;
+  setTimeout(() => (m._copied = false), 1500);
 }
 
 function recheckTitle(m) {
@@ -120,6 +131,20 @@ onMounted(load);
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+              </svg>
+            </button>
+            <button
+              class="icon-btn"
+              :class="{ ok: m._copied }"
+              :title="m._copied ? 'Copied map UID' : 'Copy map UID'"
+              :aria-label="m._copied ? 'Map UID copied' : 'Copy map UID'"
+              @click="copyUid(m)"
+            >
+              <svg v-if="!m._copied" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m4 12.5 5 5L20 6.5" />
               </svg>
             </button>
             <a
