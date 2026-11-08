@@ -2,7 +2,8 @@ const { Router } = require('express');
 const { pool } = require('../db');
 const { optionalAuth } = require('../middleware/auth');
 const { canon, groupMembers } = require('../services/links');
-const { fetchMapLeaderboard } = require('../services/tmio');
+const { Readable } = require('node:stream');
+const { fetchMapLeaderboard, fetchMapFileUrl } = require('../services/tmio');
 const { lookupMapByUid, parseTagIds, getTagsTable } = require('../services/tmx');
 const { updateMapTmxStyles } = require('../services/catalog');
 const { getCoauthors } = require('../services/coauthors');
@@ -24,6 +25,57 @@ router.get('/map/:mapUid/tmx', async (req, res) => {
     res.status(502).json({ error: 'tmx_unavailable' });
   }
 });
+
+// GET /api/map/:mapUid/file — public. The map's .Map.Gbx, streamed through
+// us. Nadeo's file URL is public, but it redirects to a CDN object named by a
+// bare UUID, so a plain link would save "cd67b314-…" with no extension; here
+// the browser gets Content-Disposition with "<map name>.Map.Gbx". The Nadeo
+// map id is already in the stored thumbnail URL (…/maps/<id>/thumbnail.jpg),
+// so the usual path costs no trackmania.io call; tm.io /api/map is only the
+// fallback. Only catalog maps — this is not an open proxy.
+router.get('/map/:mapUid/file', async (req, res) => {
+  const { mapUid } = req.params;
+  const { rows } = await pool.query(
+    'SELECT name, thumbnail_url FROM maps WHERE map_uid = $1',
+    [mapUid]
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'unknown_map' });
+  const { name, thumbnail_url: thumb } = rows[0];
+
+  try {
+    const m = /^https:\/\/core\.trackmania\.nadeo\.live\/maps\/([0-9a-f-]{36})\//i.exec(thumb || '');
+    const fileUrl = m
+      ? `https://core.trackmania.nadeo.live/maps/${m[1]}/file`
+      : await fetchMapFileUrl(mapUid, TMIO_USER_AGENT);
+    if (!fileUrl) return res.status(404).json({ error: 'file_unavailable' });
+
+    const upstream = await fetch(fileUrl, { redirect: 'follow' });
+    if (!upstream.ok || !upstream.body) {
+      throw new Error(`map file ${fileUrl} -> HTTP ${upstream.status}`);
+    }
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': contentDisposition(`${name || mapUid}.Map.Gbx`),
+      // A map UID is one exact file (re-saving makes a new UID).
+      'Cache-Control': 'public, max-age=86400',
+    });
+    const len = upstream.headers.get('content-length');
+    if (len) res.set('Content-Length', len);
+    Readable.fromWeb(upstream.body).pipe(res);
+  } catch (e) {
+    console.error('map file download failed', String(e));
+    if (!res.headersSent) res.status(502).json({ error: 'file_unavailable' });
+    else res.destroy();
+  }
+});
+
+/** attachment; filename="<ascii fallback>"; filename*=UTF-8''<full name> —
+ *  map names carry emoji/Cyrillic, and the header itself must stay ASCII. */
+function contentDisposition(filename) {
+  const safe = filename.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim() || 'map.Map.Gbx';
+  const ascii = safe.replace(/[^\x20-\x7e]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe).replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`;
+}
 
 // GET /api/map/:mapUid — public. Map details + external links (trackmania.io,
 // TMX) + top-5 leaderboard, all best-effort: the external calls can't take
@@ -130,6 +182,7 @@ router.get('/map/:mapUid', optionalAuth, async (req, res) => {
     style,
     tags,
     onTmx,
+    downloadUrl: `/api/map/${encodeURIComponent(mapUid)}/file`,
     tmioUrl: `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`,
     tmxUrl: tmx && tmx.url,
     tmxId: tmx ? tmx.trackId : null,

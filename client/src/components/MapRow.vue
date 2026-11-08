@@ -11,6 +11,7 @@ import { api } from '../utils/api';
 import { fetchTmxId } from '../utils/tmxId';
 import { copyText } from '../utils/clipboard';
 import { playInGameUrl, PLAY_HINT } from '../utils/playInGame';
+import { mapFileUrl } from '../utils/mapFile';
 import { track } from '../utils/analytics';
 import { showMapPreview, moveMapPreview, hideMapPreview } from '../utils/mapPreview';
 import { showVoters, hideVoters, invalidateVoters } from '../utils/votersPopover';
@@ -160,11 +161,10 @@ function onThumbError(e) {
         </button>
         <a
           class="icon-btn"
-          :href="`https://trackmania.io/#/leaderboard/${encodeURIComponent(map.mapUid)}`"
-          target="_blank"
-          rel="noopener"
-          title="Download on trackmania.io"
-          aria-label="Download on trackmania.io"
+          :href="mapFileUrl(map.mapUid)"
+          download
+          title="Download .Map.Gbx"
+          aria-label="Download .Map.Gbx"
           @click="track('map-download')"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

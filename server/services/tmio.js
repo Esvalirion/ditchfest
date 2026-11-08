@@ -102,6 +102,14 @@ async function fetchMapMedalTimes(mapUid, userAgent) {
   };
 }
 
+/** Nadeo's direct file URL of a map (core.trackmania.nadeo.live/maps/<id>/file,
+ *  public, no auth). Fallback for maps whose stored thumbnail URL doesn't
+ *  carry the Nadeo map id. Null when trackmania.io doesn't know the map. */
+async function fetchMapFileUrl(mapUid, userAgent) {
+  const data = await get(`/api/map/${mapUid}`, userAgent);
+  return data.fileUrl || null;
+}
+
 /** One leaderboard page for the records sweep: `length` entries starting at
  *  `offset`, plus the map's total finisher count (so the caller can walk
  *  every page — popular maps have 500+ finishers, a single top window would
@@ -130,6 +138,7 @@ module.exports = {
   stripFormat,
   fetchMapLeaderboard,
   fetchMapMedalTimes,
+  fetchMapFileUrl,
   fetchLeaderboardPage,
 };
 

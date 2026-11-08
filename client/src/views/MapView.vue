@@ -200,6 +200,13 @@ watch(() => route.params.mapUid, load, { immediate: true });
             :title="PLAY_HINT"
             @click="track('map-play')"
           >▶ Play in game</a>
+          <a
+            class="map-link-btn"
+            :href="map.downloadUrl"
+            download
+            title="Download the .Map.Gbx file"
+            @click="track('map-download')"
+          >⬇ Download</a>
           <!-- TMX id when the live TMX lookup found the map (same condition as
                the Trackmania Exchange link below), the map UID otherwise. -->
           <button

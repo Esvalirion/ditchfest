@@ -7,6 +7,7 @@ import { onMounted, ref } from 'vue';
 import { api } from '../utils/api';
 import { copyText } from '../utils/clipboard';
 import { track } from '../utils/analytics';
+import { mapFileUrl } from '../utils/mapFile';
 import MapRow from '../components/MapRow.vue';
 
 const state = ref('loading'); // 'loading' | 'error' | 'empty' | 'ready'
@@ -25,10 +26,6 @@ async function load() {
   } catch (e) {
     state.value = 'error';
   }
-}
-
-function tmioUrl(mapUid) {
-  return `https://trackmania.io/#/leaderboard/${encodeURIComponent(mapUid)}`;
 }
 
 // "by Author · Edition" — MapRow's subtitle line.
@@ -98,7 +95,7 @@ onMounted(load);
         <a class="text-link" href="https://trackmania.exchange" target="_blank" rel="noopener">Trackmania Exchange</a>.
       </p>
       <p class="subtitle subtitle-help">
-        Want to help? Grab a map on trackmania.io and upload it to TMX. Once it's up, hit the
+        Want to help? Download a map with the button on its row and upload it to TMX. Once it's up, hit the
         refresh button on its row — it drops off right away. No button-pressing? The periodic
         check catches up within a couple of days.
       </p>
@@ -149,11 +146,11 @@ onMounted(load);
             </button>
             <a
               class="icon-btn"
-              :href="tmioUrl(m.mapUid)"
-              target="_blank"
-              rel="noopener"
-              title="Download on trackmania.io"
-              aria-label="Download on trackmania.io"
+              :href="mapFileUrl(m.mapUid)"
+              download
+              title="Download .Map.Gbx"
+              aria-label="Download .Map.Gbx"
+              @click="track('map-download')"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M5 21h14" />
